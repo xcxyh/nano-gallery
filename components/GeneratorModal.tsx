@@ -1,8 +1,9 @@
+'use client';
+
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Sparkles, Save, Download, RefreshCw, AlertCircle, ImagePlus, Trash2, Globe, Lock, UserCircle } from 'lucide-react';
-import { Template, AspectRatio, ImageSize, User } from '../types';
-import { ASPECT_RATIOS } from '../constants';
-import { generateImage } from '../services/gemini';
+import { X, Sparkles, Save, Download, RefreshCw, AlertCircle, ImagePlus, Trash2, Globe, Lock, UserCircle, Coins } from 'lucide-react';
+import { Template, AspectRatio, ImageSize, User } from '@/types';
+import { generateImageAction } from '@/app/actions';
 
 interface GeneratorModalProps {
   isOpen: boolean;
@@ -10,8 +11,11 @@ interface GeneratorModalProps {
   initialTemplate?: Template | null;
   onSaveTemplate: (t: Template) => void;
   user: User | null;
+  setUser: (u: User) => void;
   onLoginRequest: () => void;
 }
+
+const ASPECT_RATIOS = ["1:1", "3:4", "4:3", "9:16", "16:9"] as const;
 
 const GeneratorModal: React.FC<GeneratorModalProps> = ({ 
   isOpen, 
@@ -19,19 +23,23 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   initialTemplate,
   onSaveTemplate,
   user,
+  setUser,
   onLoginRequest
 }) => {
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  
+  // generatedImage stores Base64 for display, remoteImageUrl stores Supabase URL for DB saving
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [remoteImageUrl, setRemoteImageUrl] = useState<string | null>(null);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showRefInput, setShowRefInput] = useState(false);
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   
-  // Save mode state
   const [isSaveMode, setIsSaveMode] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [isPublished, setIsPublished] = useState(true);
@@ -44,14 +52,15 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         setPrompt(initialTemplate.prompt);
         setAspectRatio(initialTemplate.aspectRatio);
         setGeneratedImage(initialTemplate.imageUrl || null);
+        setRemoteImageUrl(initialTemplate.imageUrl || null);
         setReferenceImage(initialTemplate.referenceImage || null);
         setNewTitle(initialTemplate.title + " (Remix)");
         setShowRefInput(!!initialTemplate.referenceImage);
       } else {
-        // Reset for clean slate
         setPrompt('');
         setAspectRatio("1:1");
         setGeneratedImage(null);
+        setRemoteImageUrl(null);
         setReferenceImage(null);
         setNewTitle('');
         setShowRefInput(false);
@@ -59,7 +68,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
       setIsSaveMode(false);
       setError(null);
       setShowExitConfirm(false);
-      setIsPublished(true); // Default to public
+      setIsPublished(true);
     }
   }, [isOpen, initialTemplate]);
 
@@ -77,19 +86,43 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const handleGenerate = async () => {
     if (!prompt.trim()) return;
     
+    if (!user) {
+        onLoginRequest();
+        return;
+    }
+
+    if (user.credits <= 0 && user.role !== 'admin') {
+        setError("You have reached your trial limit. Please upgrade for more.");
+        return;
+    }
+
     setIsGenerating(true);
     setError(null);
-    setGeneratedImage(null); // Clear previous
+    setGeneratedImage(null);
+    setRemoteImageUrl(null);
 
     try {
-      const base64 = await generateImage({
+      // Call Server Action
+      const result = await generateImageAction({
         prompt,
         aspectRatio,
         imageSize,
         referenceImage: referenceImage || undefined
       });
-      setGeneratedImage(base64);
-      setIsSaveMode(false); 
+
+      if (!result.success || !result.imageBase64) {
+        throw new Error(result.error || "Generation failed");
+      }
+
+      setGeneratedImage(result.imageBase64);
+      setRemoteImageUrl(result.imageUrl || result.imageBase64); // Fallback to base64 if URL not present
+      setIsSaveMode(false);
+      
+      // Update local user state from server response to reflect deducted credit immediately
+      if (typeof result.remainingCredits === 'number') {
+        setUser({ ...user, credits: result.remainingCredits });
+      }
+
     } catch (err: any) {
       setError(err.message || "Failed to generate image.");
     } finally {
@@ -101,11 +134,11 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     if (!generatedImage || !newTitle.trim() || !user) return;
     
     const newTemplate: Template = {
-      id: Date.now().toString(),
+      id: Date.now().toString(), // Temp ID, server assigns real one
       title: newTitle,
       prompt,
       aspectRatio,
-      imageUrl: generatedImage,
+      imageUrl: remoteImageUrl || generatedImage, // Prefer remote URL for saving
       referenceImage: referenceImage || undefined,
       author: user.name,
       ownerId: user.id,
@@ -127,9 +160,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   };
 
   const handleCloseRequest = () => {
-    // Check for unsaved changes (prompt entered or image generated but not saved)
     const isDirty = (prompt.trim().length > 0 && prompt !== initialTemplate?.prompt) || (generatedImage && !initialTemplate);
-    
     if (isDirty && !showExitConfirm) {
       setShowExitConfirm(true);
     } else {
@@ -148,7 +179,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
       
       <div className="relative w-full max-w-6xl bg-[#0f0f0f] border border-neutral-800 rounded-3xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
         
-        {/* Exit Confirmation Overlay */}
         {showExitConfirm && (
           <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
             <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
@@ -184,7 +214,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
           </div>
 
           <div className="space-y-6 flex-1">
-             {/* Prompt Input */}
             <div>
               <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Prompt</label>
               <textarea
@@ -195,7 +224,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
               />
             </div>
 
-            {/* Reference Image Toggle & Upload */}
             <div>
                <div className="flex items-center justify-between mb-3">
                  <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Reference Image</label>
@@ -252,7 +280,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                )}
             </div>
 
-            {/* Settings */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Ratio</label>
@@ -292,35 +319,59 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 <p>{error}</p>
               </div>
             )}
+            
+            {user && (
+                <div className={`p-4 rounded-xl flex items-center justify-between text-sm ${
+                    user.credits === 0 && user.role !== 'admin' ? 'bg-red-900/10 border border-red-900/30' : 'bg-neutral-900/50 border border-neutral-800'
+                }`}>
+                    <span className="text-neutral-400">Available Credits</span>
+                    <div className="flex items-center gap-2">
+                        <Coins size={14} className={user.credits > 0 ? "text-yellow-400 fill-yellow-400" : "text-neutral-500"} />
+                        <span className="font-bold text-white">{user.role === 'admin' ? '∞' : user.credits}</span>
+                    </div>
+                </div>
+            )}
           </div>
 
-          {/* Action Buttons */}
           <div className="mt-6 pt-6 border-t border-neutral-800 space-y-3">
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating || !prompt.trim()}
-              className={`w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm transition-all ${
-                isGenerating || !prompt.trim()
-                  ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                  : 'bg-white text-black hover:bg-neutral-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]'
-              }`}
-            >
-              {isGenerating ? (
-                <>
-                  <RefreshCw className="animate-spin" size={18} />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles size={18} />
-                  Generate
-                </>
-              )}
-            </button>
+            {!user ? (
+                 <button
+                    onClick={onLoginRequest}
+                    className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-yellow-400 text-black hover:bg-yellow-300 transition-all"
+                >
+                    <UserCircle size={18} />
+                    Login to Generate
+                </button>
+            ) : (
+                <button
+                onClick={handleGenerate}
+                disabled={isGenerating || !prompt.trim() || (user.credits <= 0 && user.role !== 'admin')}
+                className={`w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm transition-all ${
+                    isGenerating || !prompt.trim() || (user.credits <= 0 && user.role !== 'admin')
+                    ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                    : 'bg-white text-black hover:bg-neutral-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]'
+                }`}
+                >
+                {isGenerating ? (
+                    <>
+                    <RefreshCw className="animate-spin" size={18} />
+                    Generating...
+                    </>
+                ) : user.credits <= 0 && user.role !== 'admin' ? (
+                    <>
+                    <Lock size={18} />
+                    Limit Reached
+                    </>
+                ) : (
+                    <>
+                    <Sparkles size={18} />
+                    Generate (1 Credit)
+                    </>
+                )}
+                </button>
+            )}
 
-            {/* Save Entry Logic */}
-            {generatedImage && !isSaveMode && !initialTemplate && (
-              user ? (
+            {generatedImage && !isSaveMode && !initialTemplate && user && (
                 <button
                     onClick={() => setIsSaveMode(true)}
                     className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-neutral-800 text-white hover:bg-neutral-700 border border-neutral-700 hover:border-neutral-600 transition-all"
@@ -328,22 +379,12 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                     <Save size={18} />
                     Save Template
                 </button>
-              ) : (
-                <button
-                    onClick={onLoginRequest}
-                    className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-neutral-900 text-neutral-400 hover:bg-neutral-800 border border-dashed border-neutral-700 transition-all"
-                >
-                    <UserCircle size={18} />
-                    Login to Save Template
-                </button>
-              )
             )}
           </div>
         </div>
 
         {/* Right: Preview */}
         <div className="w-full md:w-2/3 bg-neutral-950 flex flex-col items-center justify-center p-8 relative min-h-[400px]">
-          {/* Background Grid Pattern */}
           <div className="absolute inset-0 opacity-10 pointer-events-none" 
                style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
           </div>
@@ -355,8 +396,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                  alt="Generated Result" 
                  className={`max-h-[75vh] w-auto max-w-full object-contain rounded-lg border border-neutral-800 shadow-2xl`}
                />
-               
-               {/* Image Actions Overlay */}
                <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button 
                     onClick={downloadImage}
@@ -376,7 +415,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
             </div>
           )}
 
-          {/* Save Template Modal Overlay (Centered) */}
           {isSaveMode && generatedImage && (
              <div className="absolute inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
                 <div className="bg-[#0f0f0f] border border-neutral-700 p-6 rounded-2xl shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-5 fade-in">
@@ -392,7 +430,6 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                         autoFocus
                     />
 
-                    {/* Publish Toggle */}
                     <div className="mb-6 bg-neutral-900 rounded-xl p-3 border border-neutral-800 flex items-center justify-between cursor-pointer" onClick={() => setIsPublished(!isPublished)}>
                       <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-lg ${isPublished ? 'bg-green-900/30 text-green-400' : 'bg-neutral-800 text-neutral-500'}`}>

@@ -1,5 +1,7 @@
+'use client';
+
 import React from 'react';
-import { Template } from '../types';
+import { Template } from '@/types';
 import { Play, Copy, Image as ImageIcon, Lock } from 'lucide-react';
 
 interface TemplateCardProps {
@@ -15,10 +17,9 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect }) => {
 
   return (
     <div 
-      className="group relative overflow-hidden rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-600 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl hover:-translate-y-1"
+      className="group relative overflow-hidden rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-600 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl hover:-translate-y-1 break-inside-avoid mb-6"
       onClick={() => onSelect(template)}
     >
-      {/* Aspect Ratio Container */}
       <div className={`w-full overflow-hidden bg-neutral-950 relative ${
         template.aspectRatio === "16:9" ? "aspect-video" :
         template.aspectRatio === "9:16" ? "aspect-[9/16]" :
@@ -32,7 +33,6 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect }) => {
           loading="lazy"
         />
         
-        {/* Indicators Container */}
         <div className="absolute top-2 right-2 flex flex-col gap-2">
             {template.referenceImage && (
                 <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-lg text-white/80 border border-white/10" title="Includes Reference Image">
@@ -46,7 +46,6 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect }) => {
             )}
         </div>
         
-        {/* Overlay on Hover */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4 backdrop-blur-[2px]">
             <button className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full font-medium transform scale-95 group-hover:scale-100 transition-transform">
                 <Play size={16} fill="currentColor" />

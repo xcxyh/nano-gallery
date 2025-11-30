@@ -1,22 +1,42 @@
+'use client';
+
 import React, { useState } from 'react';
-import { User, X, ChevronRight } from 'lucide-react';
+import { X, ChevronRight, KeyRound, AlertCircle } from 'lucide-react';
+import { loginAction } from '@/app/actions';
+import { User } from '@/types';
 
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLogin: (name: string) => void;
+  onLoginSuccess: (user: User) => void;
 }
 
-const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => {
+const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
   const [name, setName] = useState('');
+  const [accessCode, setAccessCode] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim()) {
-      onLogin(name);
-      onClose();
+      setLoading(true);
+      setError('');
+      try {
+        const result = await loginAction(name, accessCode);
+        if (result.success && result.user) {
+          onLoginSuccess(result.user);
+          onClose();
+          setName('');
+          setAccessCode('');
+        }
+      } catch (err) {
+        setError('Login failed. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -50,12 +70,38 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLogin }) => 
             />
           </div>
 
+          <div className="space-y-2">
+             <div className="flex items-center gap-2">
+                <KeyRound size={14} className="text-neutral-500" />
+                <label className="text-sm font-medium text-neutral-400 uppercase tracking-wider">
+                  Access Code (Optional)
+                </label>
+             </div>
+            <input
+              type="password"
+              value={accessCode}
+              onChange={(e) => setAccessCode(e.target.value)}
+              placeholder="Enter code for premium access"
+              className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-4 text-white focus:outline-none focus:border-yellow-400/50 transition-colors"
+            />
+            <p className="text-[10px] text-neutral-600">
+                Leave blank for standard trial access (3 credits).
+            </p>
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 text-red-400 text-sm">
+                <AlertCircle size={14} />
+                {error}
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={!name.trim()}
+            disabled={!name.trim() || loading}
             className="w-full py-4 bg-yellow-400 hover:bg-yellow-300 text-black font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            Start Creating <ChevronRight size={18} />
+            {loading ? 'Authenticating...' : <><span className="font-bold">Start Creating</span> <ChevronRight size={18} /></>}
           </button>
         </form>
         

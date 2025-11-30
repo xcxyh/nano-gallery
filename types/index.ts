@@ -12,7 +12,7 @@ export interface Template {
   prompt: string;
   aspectRatio: AspectRatio;
   imageUrl?: string;
-  referenceImage?: string; // Base64 string of the input image
+  referenceImage?: string; // Base64
   author?: string;
   ownerId?: string; // 'system' or user.id
   isPublished?: boolean;
@@ -25,7 +25,7 @@ export interface GenerationConfig {
   prompt: string;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
-  referenceImage?: string; // Base64 string for generation
+  referenceImage?: string;
 }
 
 export interface SessionPayload {

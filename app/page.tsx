@@ -1,149 +1,93 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Lock, Coins } from 'lucide-react';
-import { Template, User } from './types';
-import { INITIAL_TEMPLATES } from './constants';
-import TemplateCard from './components/TemplateCard';
-import GeneratorModal from './components/GeneratorModal';
-import LoginModal from './components/LoginModal';
-import { ensureApiKey } from './services/gemini';
-import { initDB, getAllTemplates, saveTemplateToDB } from './services/storage';
+'use client';
 
-const App: React.FC = () => {
+import React, { useState, useEffect } from 'react';
+import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock } from 'lucide-react';
+import { Template, User } from '@/types';
+import TemplateCard from '@/components/TemplateCard';
+import GeneratorModal from '@/components/GeneratorModal';
+import LoginModal from '@/components/LoginModal';
+import { getSessionAction, logoutAction, getTemplatesAction, saveTemplateAction } from '@/app/actions';
+
+export default function Home() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [columns, setColumns] = useState(1);
   
   // Auth & View State
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'gallery' | 'library'>('gallery');
 
-  // Load User from local storage on mount
+  // Load Session
   useEffect(() => {
-    const savedUser = localStorage.getItem('nano_user');
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        // Migration support for old user objects without credits
-        if (typeof parsed.credits === 'undefined') {
-            parsed.credits = 3;
-            parsed.role = 'user';
-        }
-        setUser(parsed);
-      } catch (e) {
-        localStorage.removeItem('nano_user');
-      }
-    }
+    getSessionAction().then(sessionUser => {
+      if (sessionUser) setUser(sessionUser);
+    });
   }, []);
 
-  const handleLoginSuccess = (loggedInUser: User) => {
-    setUser(loggedInUser);
-    localStorage.setItem('nano_user', JSON.stringify(loggedInUser));
+  const handleLoginSuccess = (newUser: User) => {
+    setUser(newUser);
+    // Reload templates to see user's private library if needed
+    loadTemplates();
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logoutAction();
     setUser(null);
-    localStorage.removeItem('nano_user');
     setActiveTab('gallery');
   };
 
-  // Responsive Masonry Columns
-  useEffect(() => {
-    const updateColumns = () => {
-      if (window.innerWidth >= 1280) setColumns(4);      // xl
-      else if (window.innerWidth >= 1024) setColumns(3); // lg
-      else if (window.innerWidth >= 768) setColumns(2);  // md
-      else setColumns(1);                                // sm
-    };
-
-    updateColumns();
-    window.addEventListener('resize', updateColumns);
-    return () => window.removeEventListener('resize', updateColumns);
-  }, []);
-
-  // Load templates from IndexedDB
-  useEffect(() => {
-    const loadData = async () => {
+  const loadTemplates = async () => {
+      setIsLoading(true);
       try {
-        await initDB();
-        
-        let storedTemplates = await getAllTemplates();
-        
-        if (storedTemplates.length === 0) {
-          // Initialize system templates with ownerId 'system' and isPublished true
-          const initialWithMeta = INITIAL_TEMPLATES.map(t => ({
-            ...t,
-            ownerId: 'system',
-            isPublished: true
-          }));
-
-          for (const t of initialWithMeta) {
-            await saveTemplateToDB(t);
-          }
-          storedTemplates = [...initialWithMeta];
-        }
-
-        const sorted = storedTemplates.sort((a, b) => Number(b.id.replace(/\D/g, '')) - Number(a.id.replace(/\D/g, '')));
-        setTemplates(sorted);
-      } catch (error) {
-        console.error("Failed to load templates:", error);
-        setTemplates(INITIAL_TEMPLATES);
+          const data = await getTemplatesAction();
+          setTemplates(data);
+      } catch (e) {
+          console.error("Failed to load templates", e);
       } finally {
-        setIsLoading(false);
+          setIsLoading(false);
       }
-    };
-
-    loadData();
-  }, []);
-
-  const handleOpenCreator = async () => {
-    const hasKey = await ensureApiKey();
-    if (hasKey) {
-        setSelectedTemplate(null);
-        setIsModalOpen(true);
-    }
   };
 
-  const handleSelectTemplate = async (template: Template) => {
-    const hasKey = await ensureApiKey();
-    if (hasKey) {
-        setSelectedTemplate(template);
-        setIsModalOpen(true);
-    }
+  // Load templates on mount
+  useEffect(() => {
+    loadTemplates();
+  }, []);
+
+  const handleOpenCreator = () => {
+    setSelectedTemplate(null);
+    setIsModalOpen(true);
+  };
+
+  const handleSelectTemplate = (template: Template) => {
+    setSelectedTemplate(template);
+    setIsModalOpen(true);
   };
 
   const handleSaveTemplate = async (newTemplate: Template) => {
+    // Optimistic update
     setTemplates(prev => [newTemplate, ...prev]);
     try {
-      await saveTemplateToDB(newTemplate);
+      // Actually save to Supabase
+      await saveTemplateAction(newTemplate);
+      // Background reload to get real ID
+      loadTemplates();
     } catch (error) {
-      console.error("Failed to save template to DB:", error);
+      console.error("Failed to save template:", error);
     }
   };
 
   // Filter Logic
   const filteredTemplates = templates.filter(t => {
     if (activeTab === 'gallery') {
-      // Show if published OR (legacy system templates often lack explicit flags in old data, assume t- prefix is public)
-      return t.isPublished || t.id.startsWith('t-') || t.ownerId === 'system';
+      // Show public templates
+      return t.isPublished || t.ownerId === 'system';
     } else {
-      // My Library: Show only my items
+      // Show my templates (public or private)
       return user && t.ownerId === user.id;
     }
   });
-
-  // Distribute templates into columns for Masonry layout
-  const getMasonryColumns = () => {
-    const cols: Template[][] = Array.from({ length: columns }, () => []);
-    filteredTemplates.forEach((template, index) => {
-      cols[index % columns].push(template);
-    });
-    return cols;
-  };
-
-  const masonryColumns = getMasonryColumns();
 
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-white/20">
@@ -166,8 +110,8 @@ const App: React.FC = () => {
               <div className="flex items-center gap-4 pl-4 border-l border-neutral-800">
                 
                 {/* Credits Indicator */}
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${user.credits === 0 ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-neutral-800 border-neutral-700 text-yellow-400'}`}>
-                    <Coins size={14} className={user.credits > 0 ? "fill-yellow-400" : ""} />
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${user.credits === 0 && user.role !== 'admin' ? 'bg-red-900/20 border-red-800 text-red-400' : 'bg-neutral-800 border-neutral-700 text-yellow-400'}`}>
+                    <Coins size={14} className={user.credits > 0 || user.role === 'admin' ? "fill-yellow-400" : ""} />
                     <span className="text-xs font-bold font-mono">
                         {user.role === 'admin' ? '∞' : user.credits}
                     </span>
@@ -235,19 +179,15 @@ const App: React.FC = () => {
             </div>
         </div>
 
-        {/* Masonry Gallery Grid */}
-        <div className="flex gap-6 items-start">
-          {masonryColumns.map((col, colIndex) => (
-            <div key={colIndex} className="flex-1 flex flex-col gap-6 w-full min-w-0">
-              {col.map((template) => (
+        {/* Masonry Layout Logic */}
+        <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+            {filteredTemplates.map((template) => (
                 <TemplateCard 
                   key={template.id} 
                   template={template} 
                   onSelect={handleSelectTemplate} 
                 />
-              ))}
-            </div>
-          ))}
+            ))}
         </div>
 
         {/* Loading State */}
@@ -260,7 +200,7 @@ const App: React.FC = () => {
 
         {/* Empty State */}
         {!isLoading && filteredTemplates.length === 0 && (
-            <div className="text-center py-20 border border-dashed border-neutral-800 rounded-3xl bg-neutral-900/20">
+            <div className="text-center py-20 border border-dashed border-neutral-800 rounded-3xl bg-neutral-900/20 break-inside-avoid">
                 <div className="w-16 h-16 bg-neutral-900 rounded-2xl flex items-center justify-center mx-auto mb-4 text-neutral-700">
                     <LayoutGrid size={32} />
                 </div>
@@ -280,7 +220,6 @@ const App: React.FC = () => {
         )}
       </main>
 
-      {/* Floating Action Button (Mobile) */}
       <button 
             onClick={handleOpenCreator}
             className="sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-yellow-400 text-black rounded-full flex items-center justify-center shadow-2xl"
@@ -309,6 +248,4 @@ const App: React.FC = () => {
       />
     </div>
   );
-};
-
-export default App;
+}
