@@ -1,6 +1,6 @@
 'use server';
 
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Part, GenerateContentResponse } from "@google/genai";
 import { createClient } from "@/utils/supabase/server";
 import { supabaseAdmin } from "@/utils/supabase/admin";
 import { GenerationConfig, User, Template } from "@/types";
@@ -415,21 +415,24 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
   const ai = new GoogleGenAI({ apiKey });
 
   try {
-    const parts: any[] = [{ text: config.prompt }];
+    const parts: Part[] = [{ text: config.prompt }];
 
     // Handle reference image if needed
     if (config.referenceImage) {
       const [metadata, base64Data] = config.referenceImage.split(',');
       const mimeType = metadata.match(/:(.*?);/)?.[1] || 'image/png';
-      parts.unshift({ inlineData: { data: base64Data, mimeType } });
-    }
+      parts.push({ 
+        inlineData: { 
+          data: base64Data, 
+          mimeType 
+        } 
+      });
+  }
 
     console.log("Calling Gemini API with model:", MODEL_NAME);
     console.log("Prompt length:", config.prompt.length);
 
-    // 注意：根据 GoogleGenAI API，imageConfig 可能需要不同的配置方式
-    // 如果类型错误，可以尝试使用 any 类型或检查 API 文档
-    const response = await ai.models.generateContent({
+    const response: GenerateContentResponse = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: { parts },
       config: {
@@ -439,9 +442,23 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
         }
       }
     });
-
-    const content = response.candidates?.[0]?.content;
-    const base64Image = content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+    
+    if (!response.candidates || response.candidates.length === 0) {
+      throw new Error("No candidates returned from the model.");
+    }
+    console.log("generateContent response:", response);
+    const content = response.candidates[0].content;
+    
+    // Find image part, do not assume it is the first part
+    let base64Image = "";
+    if (content && content.parts) {
+      for (const part of content.parts) {
+        if (part.inlineData && part.inlineData.data) {
+          base64Image = part.inlineData.data;
+          break; 
+        }
+      }
+    }
 
     if (!base64Image) throw new Error("No image generated");
 
