@@ -12,134 +12,149 @@ const MODEL_NAME = "gemini-3-pro-image-preview";
 // --- Auth Actions ---
 
 export async function loginAction(name: string, password: string) {
-  const supabase = createClient();
-  const email = `${name.toLowerCase().replace(/\s+/g, '')}@nanobanana.app`;
+  try {
+    const supabase = await createClient();
+    const email = `${name.toLowerCase().replace(/\s+/g, '')}@nanobanana.app`;
 
-  // 1. Explicit Sign In
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  });
+    // 1. Explicit Sign In
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-  if (error || !data.user) {
-    return { success: false, error: "Invalid username or password." };
+    if (error || !data.user) {
+      return { success: false, error: "Invalid username or password." };
+    }
+
+    // 2. Fetch Profile
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', data.user.id)
+      .single();
+
+    const role = profile?.role || 'user';
+    const credits = profile?.credits ?? 0;
+
+    revalidatePath('/');
+    return { 
+      success: true, 
+      user: { 
+          id: data.user.id, 
+          name: profile?.name || name, 
+          role: role as 'admin'|'user', 
+          credits, 
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.name || name}` 
+      } as User 
+    };
+  } catch (err: any) {
+    console.error("Login Error:", err);
+    return { success: false, error: "Authentication service unavailable." };
   }
-
-  // 2. Fetch Profile
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('*')
-    .eq('id', data.user.id)
-    .single();
-
-  const role = profile?.role || 'user';
-  const credits = profile?.credits ?? 0;
-
-  revalidatePath('/');
-  return { 
-    success: true, 
-    user: { 
-        id: data.user.id, 
-        name: profile?.name || name, 
-        role: role as 'admin'|'user', 
-        credits, 
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.name || name}` 
-    } as User 
-  };
 }
 
 export async function registerAction(name: string, password: string, accessCode?: string) {
-  const supabase = createClient();
-  const email = `${name.toLowerCase().replace(/\s+/g, '')}@nanobanana.app`;
+  try {
+    const supabase = await createClient();
+    const email = `${name.toLowerCase().replace(/\s+/g, '')}@nanobanana.app`;
 
-  // 1. Sign Up
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: { name }, // Metadata
-    },
-  });
+    // 1. Sign Up
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { name }, // Metadata
+      },
+    });
 
-  if (error) {
-    return { success: false, error: error.message };
+    if (error) {
+      console.error("Signup Error:", error);
+      return { success: false, error: error.message };
+    }
+
+    if (!data.user) {
+      return { success: false, error: "Registration failed." };
+    }
+
+    // 2. Determine Role and Credits based on Access Code
+    const isSuperUser = accessCode === ADMIN_CODE;
+    const role = isSuperUser ? 'admin' : 'user';
+    const credits = isSuperUser ? 9999 : 3;
+
+    // 3. Create Profile (Admin Client to bypass RLS)
+    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
+      id: data.user.id,
+      name: name,
+      role: role,
+      credits: credits
+    });
+
+    if (profileError) {
+        // Fallback: If profile exists (rare race condition), try upsert
+        await supabaseAdmin.from('profiles').upsert({
+          id: data.user.id,
+          name: name,
+          role: role,
+          credits: credits
+        });
+    }
+
+    revalidatePath('/');
+    return { 
+      success: true, 
+      user: { 
+          id: data.user.id, 
+          name, 
+          role: role as 'admin'|'user', 
+          credits, 
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}` 
+      } as User 
+    };
+  } catch (err: any) {
+    console.error("Register Exception:", err);
+    return { success: false, error: "Registration service unavailable." };
   }
-
-  if (!data.user) {
-    return { success: false, error: "Registration failed." };
-  }
-
-  // 2. Determine Role and Credits based on Access Code
-  const isSuperUser = accessCode === ADMIN_CODE;
-  const role = isSuperUser ? 'admin' : 'user';
-  const credits = isSuperUser ? 9999 : 3;
-
-  // 3. Create Profile (Admin Client to bypass RLS)
-  const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-    id: data.user.id,
-    name: name,
-    role: role,
-    credits: credits
-  });
-
-  if (profileError) {
-      // Fallback: If profile exists (rare race condition), try upsert
-      await supabaseAdmin.from('profiles').upsert({
-        id: data.user.id,
-        name: name,
-        role: role,
-        credits: credits
-      });
-  }
-
-  revalidatePath('/');
-  return { 
-    success: true, 
-    user: { 
-        id: data.user.id, 
-        name, 
-        role: role as 'admin'|'user', 
-        credits, 
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}` 
-    } as User 
-  };
 }
 
 export async function logoutAction() {
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath('/');
   return { success: true };
 }
 
 export async function getSessionAction() {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user) return null;
+    if (!user) return null;
 
-  // Fetch profile details
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+    // Fetch profile details
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
 
-  if (!profile) return null;
+    if (!profile) return null;
 
-  return {
-    id: user.id,
-    name: profile.name,
-    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`,
-    role: profile.role as 'user' | 'admin',
-    credits: profile.credits
-  } as User;
+    return {
+      id: user.id,
+      name: profile.name,
+      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`,
+      role: profile.role as 'user' | 'admin',
+      credits: profile.credits
+    } as User;
+  } catch (e) {
+    return null;
+  }
 }
 
 // --- Generation Action ---
 
 export async function generateImageAction(config: GenerationConfig): Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string; remainingCredits?: number }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   
   // 1. Verify User
   const { data: { user } } = await supabase.auth.getUser();
@@ -227,7 +242,7 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 // --- Data Actions ---
 
 export async function saveTemplateAction(template: Template) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false };
 
@@ -253,7 +268,7 @@ export async function saveTemplateAction(template: Template) {
 }
 
 export async function getTemplatesAction() {
-    const supabase = createClient();
+    const supabase = await createClient();
     
     const { data, error } = await supabase
         .from('templates')

@@ -21,7 +21,8 @@ export async function decrypt(input: string): Promise<any> {
 }
 
 export async function getSession(): Promise<User | null> {
-  const session = cookies().get("session")?.value;
+  const cookieStore = await cookies();
+  const session = cookieStore.get("session")?.value;
   if (!session) return null;
   try {
     const parsed = await decrypt(session);
@@ -34,8 +35,9 @@ export async function getSession(): Promise<User | null> {
 export async function setSession(user: User) {
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
   const session = await encrypt({ user, expires });
+  const cookieStore = await cookies();
 
-  cookies().set("session", session, {
+  cookieStore.set("session", session, {
     expires,
     httpOnly: true, // Not accessible via JavaScript on client
     secure: process.env.NODE_ENV === "production",
@@ -45,5 +47,6 @@ export async function setSession(user: User) {
 }
 
 export async function clearSession() {
-  cookies().set("session", "", { expires: new Date(0) });
+  const cookieStore = await cookies();
+  cookieStore.set("session", "", { expires: new Date(0) });
 }
