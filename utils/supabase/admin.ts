@@ -4,6 +4,11 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-key'
 
+// Debug: Check if environment variables are properly loaded
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('⚠️ SUPABASE_SERVICE_ROLE_KEY 未配置！')
+}
+
 // Note: This client uses the SERVICE_ROLE_KEY.
 // It bypasses Row Level Security. Never use this on the client side.
 export const supabaseAdmin = createClient(
