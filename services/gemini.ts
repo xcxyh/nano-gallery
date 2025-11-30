@@ -29,7 +29,7 @@ export const generateImage = async (config: GenerationConfig): Promise<string> =
   }
 
   // Always create a new instance to get the latest injected key
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   try {
     const parts: any[] = [];

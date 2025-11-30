@@ -32,7 +32,7 @@ export async function loginAction(email: string, password: string) {
 
     if (error) {
       console.error("Login Error Details:", error);
-      
+
       // 提供更详细的错误信息
       if (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials')) {
         return { success: false, error: "邮箱或密码错误，请检查后重试" };
@@ -43,7 +43,7 @@ export async function loginAction(email: string, password: string) {
       if (error.message.includes('User not found')) {
         return { success: false, error: "该邮箱未注册，请先注册" };
       }
-      
+
       return { success: false, error: error.message || "登录失败，请稍后重试" };
     }
 
@@ -51,27 +51,74 @@ export async function loginAction(email: string, password: string) {
       return { success: false, error: "登录失败，未获取到用户信息" };
     }
 
-    // 2. Fetch Profile
-    const { data: profile } = await supabaseAdmin
+    // 2. Fetch Profile (如果不存在则创建)
+    let { data: profile, error: profileFetchError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', data.user.id)
       .single();
 
+    // 如果 profile 不存在，自动创建一个默认的 profile
+    if (!profile || profileFetchError) {
+      console.log("Profile not found, creating default profile for user:", data.user.id);
+      const displayName = extractUsernameFromEmail(normalizedEmail);
+
+      const { data: newProfile, error: createError } = await supabaseAdmin
+        .from('profiles')
+        .insert({
+          id: data.user.id,
+          name: displayName,
+          role: 'user',
+          credits: 3 // 默认积分
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error("Failed to create profile:", createError);
+        // 如果插入失败，尝试 upsert
+        const { data: upsertedProfile, error: upsertError } = await supabaseAdmin
+          .from('profiles')
+          .upsert({
+            id: data.user.id,
+            name: displayName,
+            role: 'user',
+            credits: 3
+          })
+          .select()
+          .single();
+
+        if (upsertError) {
+          console.error("Failed to upsert profile:", upsertError);
+          // 即使创建失败，也返回默认值
+          profile = {
+            id: data.user.id,
+            name: displayName,
+            role: 'user',
+            credits: 3
+          } as any;
+        } else {
+          profile = upsertedProfile;
+        }
+      } else {
+        profile = newProfile;
+      }
+    }
+
     const role = profile?.role || 'user';
-    const credits = profile?.credits ?? 0;
+    const credits = profile?.credits ?? 3; // 默认积分改为 3，而不是 0
     const displayName = profile?.name || extractUsernameFromEmail(normalizedEmail);
 
     revalidatePath('/');
-    return { 
-      success: true, 
-      user: { 
-          id: data.user.id, 
-          name: displayName, 
-          role: role as 'admin'|'user', 
-          credits, 
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}` 
-      } as User 
+    return {
+      success: true,
+      user: {
+        id: data.user.id,
+        name: displayName,
+        role: role as 'admin' | 'user',
+        credits,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+      } as User
     };
   } catch (err: any) {
     console.error("Login Error:", err);
@@ -129,7 +176,7 @@ export async function registerAction(email: string, password: string, accessCode
         // 注意：这需要 Supabase 项目启用了 admin API 和正确的 SERVICE_ROLE_KEY
         const { data: updatedUser, error: confirmError } = await supabaseAdmin.auth.admin.updateUserById(
           data.user.id,
-          { 
+          {
             email_confirm: true,
             // 也可以设置 confirmed_at 时间戳
             user_metadata: data.user.user_metadata || {}
@@ -155,33 +202,82 @@ export async function registerAction(email: string, password: string, accessCode
     const credits = isSuperUser ? 9999 : 3;
 
     // 4. Create Profile (Admin Client to bypass RLS)
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-      id: data.user.id,
-      name: displayName,
-      role: role,
-      credits: credits
-    });
+    const { data: createdProfile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .insert({
+        id: data.user.id,
+        name: displayName,
+        role: role,
+        credits: credits
+      })
+      .select()
+      .single();
 
     if (profileError) {
-        // Fallback: If profile exists (rare race condition), try upsert
-        await supabaseAdmin.from('profiles').upsert({
+      console.error("Profile creation error:", profileError);
+      console.error("Error details:", JSON.stringify(profileError, null, 2));
+
+      // 检查是否是 RLS 策略问题
+      if (profileError.message?.includes('permission denied') || profileError.message?.includes('RLS') || profileError.code === '42501') {
+        console.error("RLS policy issue detected. Please run the fix_profiles_rls.sql script in Supabase Dashboard.");
+      }
+
+      // Fallback: If profile exists (rare race condition), try upsert
+      const { data: upsertedProfile, error: upsertError } = await supabaseAdmin
+        .from('profiles')
+        .upsert({
           id: data.user.id,
           name: displayName,
           role: role,
           credits: credits
-        });
+        })
+        .select()
+        .single();
+
+      if (upsertError) {
+        console.error("Profile upsert error:", upsertError);
+        console.error("Upsert error details:", JSON.stringify(upsertError, null, 2));
+
+        // 提供更详细的错误信息
+        let errorMessage = "注册成功，但创建用户资料失败。";
+        if (upsertError.message?.includes('permission denied') || upsertError.code === '42501') {
+          errorMessage += " 这可能是 RLS 策略问题，请检查 Supabase 配置。";
+        } else if (upsertError.message) {
+          errorMessage += ` 错误详情: ${upsertError.message}`;
+        }
+        errorMessage += " 请稍后重试登录（登录时会自动创建 profile）。";
+
+        return {
+          success: false,
+          error: errorMessage
+        };
+      }
+
+      // 使用 upsert 后的 profile
+      if (!upsertedProfile) {
+        return {
+          success: false,
+          error: "注册成功，但无法获取用户资料。请稍后重试登录"
+        };
+      }
+    } else if (!createdProfile) {
+      console.error("Profile created but no data returned");
+      return {
+        success: false,
+        error: "注册成功，但无法获取用户资料。请稍后重试登录"
+      };
     }
 
     revalidatePath('/');
-    return { 
-      success: true, 
-      user: { 
-          id: data.user.id, 
-          name: displayName, 
-          role: role as 'admin'|'user', 
-          credits, 
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}` 
-      } as User 
+    return {
+      success: true,
+      user: {
+        id: data.user.id,
+        name: displayName,
+        role: role as 'admin' | 'user',
+        credits,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
+      } as User
     };
   } catch (err: any) {
     console.error("Register Exception:", err);
@@ -203,23 +299,79 @@ export async function getSessionAction() {
 
     if (!user) return null;
 
-    // Fetch profile details
-    const { data: profile } = await supabase
+    // Fetch profile details (使用 admin client 以确保可以读取)
+    const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .single();
 
-    if (!profile) return null;
+    // 如果 profile 不存在，自动创建一个默认的 profile
+    if (!profile || profileError) {
+      console.log("Profile not found in getSessionAction, creating default profile for user:", user.id);
+      const displayName = user.user_metadata?.name || user.email?.split('@')[0] || 'User';
+
+      const { data: newProfile, error: createError } = await supabaseAdmin
+        .from('profiles')
+        .insert({
+          id: user.id,
+          name: displayName,
+          role: 'user',
+          credits: 3 // 默认积分
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error("Failed to create profile in getSessionAction:", createError);
+        // 如果插入失败，尝试 upsert
+        const { data: upsertedProfile } = await supabaseAdmin
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            name: displayName,
+            role: 'user',
+            credits: 3
+          })
+          .select()
+          .single();
+
+        if (!upsertedProfile) {
+          // 如果还是失败，返回 null
+          return null;
+        }
+
+        return {
+          id: user.id,
+          name: upsertedProfile.name,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${upsertedProfile.name}`,
+          role: upsertedProfile.role as 'user' | 'admin',
+          credits: upsertedProfile.credits ?? 3
+        } as User;
+      }
+
+      if (!newProfile) {
+        return null;
+      }
+
+      return {
+        id: user.id,
+        name: newProfile.name,
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newProfile.name}`,
+        role: newProfile.role as 'user' | 'admin',
+        credits: newProfile.credits ?? 3
+      } as User;
+    }
 
     return {
       id: user.id,
       name: profile.name,
       avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`,
       role: profile.role as 'user' | 'admin',
-      credits: profile.credits
+      credits: profile.credits ?? 3 // 确保有默认值
     } as User;
   } catch (e) {
+    console.error("getSessionAction error:", e);
     return null;
   }
 }
@@ -228,7 +380,7 @@ export async function getSessionAction() {
 
 export async function generateImageAction(config: GenerationConfig): Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string; remainingCredits?: number }> {
   const supabase = await createClient();
-  
+
   // 1. Verify User
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -249,25 +401,43 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
   }
 
   // 3. Call Gemini API
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) return { success: false, error: "API Key missing" };
-  
+  const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+  if (!apiKey) {
+    console.error("GEMINI_API_KEY or API_KEY environment variable is missing");
+    return { success: false, error: "API Key 未配置。请在 .env.local 中设置 GEMINI_API_KEY" };
+  }
+
+  if (apiKey === 'placeholder-key' || apiKey.length < 10) {
+    console.error("Invalid API key detected");
+    return { success: false, error: "API Key 无效。请检查 .env.local 中的 GEMINI_API_KEY 配置" };
+  }
+
   const ai = new GoogleGenAI({ apiKey });
 
   try {
     const parts: any[] = [{ text: config.prompt }];
-    
+
     // Handle reference image if needed
     if (config.referenceImage) {
-        const [metadata, base64Data] = config.referenceImage.split(',');
-        const mimeType = metadata.match(/:(.*?);/)?.[1] || 'image/png';
-        parts.unshift({ inlineData: { data: base64Data, mimeType } });
+      const [metadata, base64Data] = config.referenceImage.split(',');
+      const mimeType = metadata.match(/:(.*?);/)?.[1] || 'image/png';
+      parts.unshift({ inlineData: { data: base64Data, mimeType } });
     }
 
+    console.log("Calling Gemini API with model:", MODEL_NAME);
+    console.log("Prompt length:", config.prompt.length);
+
+    // 注意：根据 GoogleGenAI API，imageConfig 可能需要不同的配置方式
+    // 如果类型错误，可以尝试使用 any 类型或检查 API 文档
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
       contents: { parts },
-      config: { imageConfig: { aspectRatio: config.aspectRatio, imageSize: config.imageSize } }
+      config: {
+        imageConfig: {
+          aspectRatio: config.aspectRatio,
+          imageSize: config.imageSize
+        }
+      }
     });
 
     const content = response.candidates?.[0]?.content;
@@ -278,7 +448,7 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
     // 4. Upload to Supabase Storage
     const buffer = Buffer.from(base64Image, 'base64');
     const fileName = `${user.id}/${Date.now()}.png`;
-    
+
     const { error: uploadError } = await supabaseAdmin.storage
       .from('images')
       .upload(fileName, buffer, { contentType: 'image/png' });
@@ -293,22 +463,51 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
     let newCredits = profile.credits;
     if (profile.role !== 'admin') {
       newCredits = Math.max(0, profile.credits - 1);
-      await supabaseAdmin
+      const { error: updateError } = await supabaseAdmin
         .from('profiles')
         .update({ credits: newCredits })
         .eq('id', user.id);
+
+      if (updateError) {
+        console.error("Failed to update credits:", updateError);
+        // 即使更新失败，也返回成功（因为图片已生成）
+        // 但记录错误以便后续处理
+      } else {
+        console.log("Credits updated successfully:", newCredits);
+      }
     }
 
-    return { 
-      success: true, 
-      imageBase64: `data:image/png;base64,${base64Image}`, 
+    return {
+      success: true,
+      imageBase64: `data:image/png;base64,${base64Image}`,
       imageUrl: publicUrl,
       remainingCredits: newCredits
     };
 
   } catch (error: any) {
     console.error("Gen Error:", error);
-    return { success: false, error: error.message };
+    console.error("Error details:", {
+      message: error.message,
+      cause: error.cause,
+      stack: error.stack?.substring(0, 500)
+    });
+
+    // 提供更详细的错误信息
+    let errorMessage = "图片生成失败";
+
+    if (error.message?.includes('fetch failed') || error.message?.includes('network') || error.cause?.code === 'ECONNREFUSED') {
+      errorMessage = "网络连接失败。请检查网络连接或 API 服务是否可用";
+    } else if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+      errorMessage = "API Key 无效或已过期。请检查 .env.local 中的 GEMINI_API_KEY";
+    } else if (error.message?.includes('403') || error.message?.includes('Forbidden')) {
+      errorMessage = "API 访问被拒绝。请检查 API Key 权限或配额";
+    } else if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+      errorMessage = "API 请求频率过高，请稍后重试";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -332,33 +531,33 @@ export async function saveTemplateAction(template: Template) {
   });
 
   if (error) {
-      console.error("Save Error", error);
-      return { success: false, error: error.message };
+    console.error("Save Error", error);
+    return { success: false, error: error.message };
   }
-  
+
   revalidatePath('/');
   return { success: true };
 }
 
 export async function getTemplatesAction() {
-    const supabase = await createClient();
-    
-    const { data, error } = await supabase
-        .from('templates')
-        .select('*')
-        .order('created_at', { ascending: false });
+  const supabase = await createClient();
 
-    if (error) return [];
+  const { data, error } = await supabase
+    .from('templates')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-    return data.map((t: any) => ({
-        id: t.id.toString(),
-        title: t.title,
-        prompt: t.prompt,
-        aspectRatio: t.aspect_ratio,
-        imageUrl: t.image_url,
-        referenceImage: t.reference_image,
-        author: t.author,
-        ownerId: t.owner_id,
-        isPublished: t.is_published
-    })) as Template[];
+  if (error) return [];
+
+  return data.map((t: any) => ({
+    id: t.id.toString(),
+    title: t.title,
+    prompt: t.prompt,
+    aspectRatio: t.aspect_ratio,
+    imageUrl: t.image_url,
+    referenceImage: t.reference_image,
+    author: t.author,
+    ownerId: t.owner_id,
+    isPublished: t.is_published
+  })) as Template[];
 }
