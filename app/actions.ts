@@ -11,72 +11,97 @@ const MODEL_NAME = "gemini-3-pro-image-preview";
 
 // --- Auth Actions ---
 
-export async function loginAction(name: string, accessCode: string) {
+export async function loginAction(name: string, password: string) {
   const supabase = createClient();
   const email = `${name.toLowerCase().replace(/\s+/g, '')}@nanobanana.app`;
-  const password = `banana-${name}-secure-pass`;
 
-  // 1. Try to sign in
-  let { data, error } = await supabase.auth.signInWithPassword({
+  // 1. Explicit Sign In
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  // 2. If sign in fails, try to sign up
-  if (error) {
-    const signUpRes = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name }, // Metadata
-      },
-    });
-
-    if (signUpRes.error) {
-      return { success: false, error: signUpRes.error.message };
-    }
-    data = signUpRes.data;
+  if (error || !data.user) {
+    return { success: false, error: "Invalid username or password." };
   }
 
-  if (!data.user) {
-    return { success: false, error: "Authentication failed" };
-  }
-
-  // 3. Determine Role and Credits based on Access Code
-  const isSuperUser = accessCode === ADMIN_CODE;
-  const role = isSuperUser ? 'admin' : 'user';
-  // If user is admin, infinite credits (9999). If user, default 3 (or keep existing if higher).
-  // We need to fetch existing profile to not overwrite credits if they simply re-login.
-  
+  // 2. Fetch Profile
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('*')
     .eq('id', data.user.id)
     .single();
 
-  let credits = 3;
-  if (profile) {
-     // If re-logging in with admin code, upgrade them.
-     if (isSuperUser) credits = 9999;
-     // If normal user re-logging, keep their current credits
-     else credits = profile.credits;
-  } else {
-     // First time profile creation
-     credits = isSuperUser ? 9999 : 3;
+  const role = profile?.role || 'user';
+  const credits = profile?.credits ?? 0;
+
+  revalidatePath('/');
+  return { 
+    success: true, 
+    user: { 
+        id: data.user.id, 
+        name: profile?.name || name, 
+        role: role as 'admin'|'user', 
+        credits, 
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile?.name || name}` 
+    } as User 
+  };
+}
+
+export async function registerAction(name: string, password: string, accessCode?: string) {
+  const supabase = createClient();
+  const email = `${name.toLowerCase().replace(/\s+/g, '')}@nanobanana.app`;
+
+  // 1. Sign Up
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { name }, // Metadata
+    },
+  });
+
+  if (error) {
+    return { success: false, error: error.message };
   }
 
-  // 4. Update/Upsert Profile using Admin Client (Bypass RLS)
-  await supabaseAdmin.from('profiles').upsert({
+  if (!data.user) {
+    return { success: false, error: "Registration failed." };
+  }
+
+  // 2. Determine Role and Credits based on Access Code
+  const isSuperUser = accessCode === ADMIN_CODE;
+  const role = isSuperUser ? 'admin' : 'user';
+  const credits = isSuperUser ? 9999 : 3;
+
+  // 3. Create Profile (Admin Client to bypass RLS)
+  const { error: profileError } = await supabaseAdmin.from('profiles').insert({
     id: data.user.id,
     name: name,
     role: role,
     credits: credits
   });
 
+  if (profileError) {
+      // Fallback: If profile exists (rare race condition), try upsert
+      await supabaseAdmin.from('profiles').upsert({
+        id: data.user.id,
+        name: name,
+        role: role,
+        credits: credits
+      });
+  }
+
   revalidatePath('/');
   return { 
     success: true, 
-    user: { id: data.user.id, name, role, credits, avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}` } as User 
+    user: { 
+        id: data.user.id, 
+        name, 
+        role: role as 'admin'|'user', 
+        credits, 
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}` 
+    } as User 
   };
 }
 
@@ -144,7 +169,7 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
   try {
     const parts: any[] = [{ text: config.prompt }];
     
-    // Handle reference image if needed (omitted for brevity, same logic as before)
+    // Handle reference image if needed
     if (config.referenceImage) {
         const [metadata, base64Data] = config.referenceImage.split(',');
         const mimeType = metadata.match(/:(.*?);/)?.[1] || 'image/png';
@@ -188,8 +213,8 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 
     return { 
       success: true, 
-      imageBase64: `data:image/png;base64,${base64Image}`, // Return base64 for immediate display
-      imageUrl: publicUrl, // Return URL for DB saving
+      imageBase64: `data:image/png;base64,${base64Image}`, 
+      imageUrl: publicUrl,
       remainingCredits: newCredits
     };
 
@@ -212,7 +237,7 @@ export async function saveTemplateAction(template: Template) {
     prompt: template.prompt,
     aspect_ratio: template.aspectRatio,
     image_url: template.imageUrl,
-    reference_image: template.referenceImage, // Optional: Consider storing this in Storage too if large
+    reference_image: template.referenceImage,
     author: template.author,
     owner_id: user.id,
     is_published: template.isPublished
@@ -228,9 +253,6 @@ export async function saveTemplateAction(template: Template) {
 }
 
 export async function getTemplatesAction() {
-    // We use admin client here just to easily fetch all without complex RLS for the 'system' templates if they aren't owned by the current user
-    // However, for security, using standard client is better.
-    // Assuming "Public templates" policy exists.
     const supabase = createClient();
     
     const { data, error } = await supabase
