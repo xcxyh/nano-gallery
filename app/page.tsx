@@ -293,6 +293,11 @@ export default function Home() {
         )}
       </main>
 
+      {/* Footer */}
+      <footer className="w-full py-6 text-center border-t border-white/5 bg-[#050505] text-neutral-500 text-sm">
+        <p>Copyright © 2025, Created by XCC</p>
+      </footer>
+
       <button 
             onClick={handleOpenCreator}
             className="sm:hidden fixed bottom-6 right-6 z-40 w-14 h-14 bg-yellow-400 text-black rounded-full flex items-center justify-center shadow-2xl"
