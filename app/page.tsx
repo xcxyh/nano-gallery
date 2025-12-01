@@ -18,6 +18,21 @@ export default function Home() {
   // Auth & View State
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'gallery' | 'library'>('gallery');
+  const [columns, setColumns] = useState(1);
+
+  // Handle Resize for Masonry Layout
+  useEffect(() => {
+    const updateColumns = () => {
+      if (window.innerWidth >= 1280) setColumns(4); // xl
+      else if (window.innerWidth >= 1024) setColumns(3); // lg
+      else if (window.innerWidth >= 768) setColumns(2); // md
+      else setColumns(1);
+    };
+
+    updateColumns();
+    window.addEventListener('resize', updateColumns);
+    return () => window.removeEventListener('resize', updateColumns);
+  }, []);
 
   // Load Session
   useEffect(() => {
@@ -89,6 +104,15 @@ export default function Home() {
     }
   });
 
+  // Distribute templates into columns for horizontal masonry
+  const getColumns = () => {
+    const cols = Array.from({ length: columns }, () => [] as Template[]);
+    filteredTemplates.forEach((t, i) => {
+      cols[i % columns].push(t);
+    });
+    return cols;
+  };
+
   return (
     <div className="min-h-screen bg-[#050505] text-white selection:bg-white/20">
       
@@ -155,6 +179,17 @@ export default function Home() {
       {/* Main Content */}
       <main className="container mx-auto px-6 py-12">
         
+        {/* Intro Section */}
+        <div className="mb-12 text-center max-w-3xl mx-auto">
+           <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
+             Discover & Create with <span className="text-yellow-400">Nano Banana Pro</span>
+           </h2>
+           <p className="text-neutral-400 text-lg">
+             Explore a curated collection of Gemini 3 Pro prompts and templates. 
+             Generate stunning visuals, remix existing styles, and build your personal library.
+           </p>
+        </div>
+
         {/* Tabs / Navigation */}
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-6">
             <div className="flex bg-neutral-900/50 p-1 rounded-full border border-neutral-800 backdrop-blur-sm">
@@ -179,14 +214,18 @@ export default function Home() {
             </div>
         </div>
 
-        {/* Masonry Layout Logic */}
-        <div className="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
-            {filteredTemplates.map((template) => (
-                <TemplateCard 
-                  key={template.id} 
-                  template={template} 
-                  onSelect={handleSelectTemplate} 
-                />
+        {/* Masonry Layout (Horizontal Priority) */}
+        <div className="flex gap-6 items-start">
+            {getColumns().map((col, colIndex) => (
+                <div key={colIndex} className="flex-1 flex flex-col gap-6">
+                    {col.map((template) => (
+                        <TemplateCard 
+                            key={template.id} 
+                            template={template} 
+                            onSelect={handleSelectTemplate} 
+                        />
+                    ))}
+                </div>
             ))}
         </div>
 

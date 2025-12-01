@@ -17,7 +17,7 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect }) => {
 
   return (
     <div 
-      className="group relative overflow-hidden rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-600 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl hover:-translate-y-1 break-inside-avoid mb-6"
+      className="group relative overflow-hidden rounded-2xl bg-neutral-900 border border-neutral-800 hover:border-neutral-600 transition-all duration-300 cursor-pointer shadow-lg hover:shadow-xl hover:-translate-y-1 transform-gpu"
       onClick={() => onSelect(template)}
     >
       <div className={`w-full overflow-hidden bg-neutral-950 relative ${
