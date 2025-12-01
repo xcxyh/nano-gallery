@@ -46,6 +46,14 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const getCost = () => {
+    if (imageSize === "2K") return 2;
+    if (imageSize === "4K") return 4;
+    return 1;
+  };
+
+  const cost = getCost();
+
   useEffect(() => {
     if (isOpen) {
       if (initialTemplate) {
@@ -91,8 +99,8 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         return;
     }
 
-    if (user.credits <= 0 && user.role !== 'admin') {
-        setError("You have reached your trial limit. Please upgrade for more.");
+    if (user.credits < cost && user.role !== 'admin') {
+        setError(`Insufficient credits. You need ${cost} credits but have ${user.credits}.`);
         return;
     }
 
@@ -322,12 +330,12 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
             
             {user && (
                 <div className={`p-4 rounded-xl flex items-center justify-between text-sm ${
-                    user.credits === 0 && user.role !== 'admin' ? 'bg-red-900/10 border border-red-900/30' : 'bg-neutral-900/50 border border-neutral-800'
+                    (user.credits < cost && user.role !== 'admin') ? 'bg-red-900/10 border border-red-900/30' : 'bg-neutral-900/50 border border-neutral-800'
                 }`}>
                     <span className="text-neutral-400">Available Credits</span>
                     <div className="flex items-center gap-2">
-                        <Coins size={14} className={user.credits > 0 ? "text-yellow-400 fill-yellow-400" : "text-neutral-500"} />
-                        <span className="font-bold text-white">{user.role === 'admin' ? '∞' : user.credits}</span>
+                        <Coins size={14} className={user.credits >= cost || user.role === 'admin' ? "text-yellow-400 fill-yellow-400" : "text-red-400"} />
+                        <span className={`font-bold ${user.credits >= cost || user.role === 'admin' ? "text-white" : "text-red-400"}`}>{user.role === 'admin' ? '∞' : user.credits}</span>
                     </div>
                 </div>
             )}
@@ -345,9 +353,9 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
             ) : (
                 <button
                 onClick={handleGenerate}
-                disabled={isGenerating || !prompt.trim() || (user.credits <= 0 && user.role !== 'admin')}
+                disabled={isGenerating || !prompt.trim() || (user.credits < cost && user.role !== 'admin')}
                 className={`w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm transition-all ${
-                    isGenerating || !prompt.trim() || (user.credits <= 0 && user.role !== 'admin')
+                    isGenerating || !prompt.trim() || (user.credits < cost && user.role !== 'admin')
                     ? 'bg-neutral-800 text-neutral-500 cursor-not-allowed'
                     : 'bg-white text-black hover:bg-neutral-200 shadow-[0_0_20px_rgba(255,255,255,0.1)] hover:shadow-[0_0_30px_rgba(255,255,255,0.2)]'
                 }`}
@@ -357,15 +365,15 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                     <RefreshCw className="animate-spin" size={18} />
                     Generating...
                     </>
-                ) : user.credits <= 0 && user.role !== 'admin' ? (
+                ) : (user.credits < cost && user.role !== 'admin') ? (
                     <>
                     <Lock size={18} />
-                    Limit Reached
+                    Insufficient Credits
                     </>
                 ) : (
                     <>
                     <Sparkles size={18} />
-                    Generate (1 Credit)
+                    Generate ({cost} Credit{cost > 1 ? 's' : ''})
                     </>
                 )}
                 </button>

@@ -396,8 +396,13 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 
   if (!profile) return { success: false, error: "Profile not found" };
 
-  if (profile.role !== 'admin' && profile.credits <= 0) {
-    return { success: false, error: "Insufficient credits" };
+  // Calculate cost based on image size
+  let cost = 1;
+  if (config.imageSize === '2K') cost = 2;
+  if (config.imageSize === '4K') cost = 4;
+
+  if (profile.role !== 'admin' && profile.credits < cost) {
+    return { success: false, error: `Insufficient credits. Need ${cost} credits, but you have ${profile.credits}.` };
   }
 
   // 3. Call Gemini API
@@ -479,7 +484,7 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
     // 5. Deduct Credits
     let newCredits = profile.credits;
     if (profile.role !== 'admin') {
-      newCredits = Math.max(0, profile.credits - 1);
+      newCredits = Math.max(0, profile.credits - cost);
       const { error: updateError } = await supabaseAdmin
         .from('profiles')
         .update({ credits: newCredits })
