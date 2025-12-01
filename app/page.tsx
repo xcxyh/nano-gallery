@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock } from 'lucide-react';
+import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock, Search } from 'lucide-react';
 import { Template, User } from '@/types';
 import TemplateCard from '@/components/TemplateCard';
 import GeneratorModal from '@/components/GeneratorModal';
@@ -19,6 +19,7 @@ export default function Home() {
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'gallery' | 'library'>('gallery');
   const [columns, setColumns] = useState(1);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Handle Resize for Masonry Layout
   useEffect(() => {
@@ -95,6 +96,14 @@ export default function Home() {
 
   // Filter Logic
   const filteredTemplates = templates.filter(t => {
+    // Search Filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch = t.title.toLowerCase().includes(query) || 
+                          t.prompt.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+
     if (activeTab === 'gallery') {
       // Show public templates
       return t.isPublished || t.ownerId === 'system';
@@ -188,6 +197,31 @@ export default function Home() {
              Explore a curated collection of Gemini 3 Pro prompts and templates. 
              Generate stunning visuals, remix existing styles, and build your personal library.
            </p>
+        </div>
+
+        {/* Search Bar */}
+        <div className="max-w-2xl mx-auto mb-12 relative">
+           <div className="relative group">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+                 <Search className="text-neutral-500 group-focus-within:text-yellow-400 transition-colors" size={20} />
+              </div>
+              <input 
+                type="text" 
+                placeholder="Search templates by title or prompt..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-neutral-900/50 border border-neutral-800 text-white pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:border-yellow-400/50 focus:ring-1 focus:ring-yellow-400/50 transition-all placeholder:text-neutral-600"
+              />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-4 flex items-center text-neutral-500 hover:text-white transition-colors"
+                >
+                  <span className="sr-only">Clear search</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                </button>
+              )}
+           </div>
         </div>
 
         {/* Tabs / Navigation */}
