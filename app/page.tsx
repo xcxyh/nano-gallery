@@ -28,6 +28,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<'gallery' | 'library' | 'review'>('gallery');
   const [columns, setColumns] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [pendingCount, setPendingCount] = useState(0);
 
   // Handle Resize for Masonry Layout
   useEffect(() => {
@@ -56,6 +57,13 @@ export default function Home() {
     loadTemplates();
   };
 
+  // Fetch pending count for admin
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      getPendingTemplatesAction().then(data => setPendingCount(data.length));
+    }
+  }, [user, activeTab]);
+
   const handleLogout = async () => {
     await logoutAction();
     setUser(null);
@@ -64,6 +72,7 @@ export default function Home() {
 
   const loadTemplates = async () => {
       setIsLoading(true);
+      setTemplates([]); // Clear current templates to hide them while loading
       try {
           let data: Template[] = [];
           if (activeTab === 'gallery') {
@@ -125,6 +134,7 @@ export default function Home() {
     try {
         await updateTemplateStatusAction(id, 'approved');
         setTemplates(prev => prev.filter(t => t.id !== id));
+        setPendingCount(prev => Math.max(0, prev - 1));
     } catch (error) {
         console.error("Failed to approve:", error);
     }
@@ -135,6 +145,7 @@ export default function Home() {
     try {
         await updateTemplateStatusAction(id, 'rejected');
         setTemplates(prev => prev.filter(t => t.id !== id));
+        setPendingCount(prev => Math.max(0, prev - 1));
     } catch (error) {
         console.error("Failed to reject:", error);
     }
@@ -285,7 +296,7 @@ export default function Home() {
                         className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'review' ? 'bg-white text-black shadow-lg' : 'text-neutral-500 hover:text-white'}`}
                     >
                         {activeTab !== 'review' && <ShieldCheck size={12} className="opacity-50" />}
-                        Review ({templates.length})
+                        Review ({pendingCount})
                     </button>
                 )}
             </div>

@@ -48,8 +48,9 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onAppro
         
         <div className="absolute top-2 right-2 flex flex-col gap-2">
             {template.referenceImage && (
-                <div className="bg-black/50 backdrop-blur-sm p-1.5 rounded-lg text-white/80 border border-white/10" title="Includes Reference Image">
+                <div className="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg text-white/80 border border-white/10 flex items-center gap-1.5" title="Includes Reference Image">
                     <ImageIcon size={12} />
+                    <span className="text-[10px] font-medium">Ref Image</span>
                 </div>
             )}
             {template.isPublished === false && (
