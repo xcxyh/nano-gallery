@@ -2,17 +2,30 @@
 
 import React from 'react';
 import { Template } from '@/types';
-import { Play, Copy, Image as ImageIcon, Lock } from 'lucide-react';
+import { Play, Copy, Image as ImageIcon, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface TemplateCardProps {
   template: Template;
   onSelect: (t: Template) => void;
+  onApprove?: (id: string) => void;
+  onReject?: (id: string) => void;
+  showStatus?: boolean;
 }
 
-const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect }) => {
+const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onApprove, onReject, showStatus }) => {
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(template.prompt);
+  };
+
+  const handleApprove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onApprove?.(template.id);
+  };
+
+  const handleReject = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onReject?.(template.id);
   };
 
   return (
@@ -44,13 +57,42 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect }) => {
                     <Lock size={12} />
                 </div>
             )}
+            {showStatus && template.status === 'pending' && (
+               <div className="bg-yellow-500/20 backdrop-blur-sm px-2 py-1 rounded-lg text-yellow-400 border border-yellow-500/30 flex items-center gap-1">
+                  <Clock size={12} />
+                  <span className="text-[10px] font-bold uppercase">Pending</span>
+               </div>
+            )}
+            {showStatus && template.status === 'rejected' && (
+               <div className="bg-red-500/20 backdrop-blur-sm px-2 py-1 rounded-lg text-red-400 border border-red-500/30 flex items-center gap-1">
+                  <XCircle size={12} />
+                  <span className="text-[10px] font-bold uppercase">Rejected</span>
+               </div>
+            )}
         </div>
         
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4 backdrop-blur-[2px]">
-            <button className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full font-medium transform scale-95 group-hover:scale-100 transition-transform">
-                <Play size={16} fill="currentColor" />
-                Try this
-            </button>
+            {onApprove && onReject ? (
+               <div className="flex gap-2">
+                 <button 
+                    onClick={handleApprove}
+                    className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full font-medium transition-colors"
+                 >
+                    <CheckCircle size={16} /> Approve
+                 </button>
+                 <button 
+                    onClick={handleReject}
+                    className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full font-medium transition-colors"
+                 >
+                    <XCircle size={16} /> Reject
+                 </button>
+               </div>
+            ) : (
+                <button className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full font-medium transform scale-95 group-hover:scale-100 transition-transform">
+                    <Play size={16} fill="currentColor" />
+                    Try this
+                </button>
+            )}
         </div>
       </div>
 

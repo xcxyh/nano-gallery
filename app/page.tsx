@@ -1,12 +1,20 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock, Search } from 'lucide-react';
+import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock, Search, ShieldCheck } from 'lucide-react';
 import { Template, User } from '@/types';
 import TemplateCard from '@/components/TemplateCard';
 import GeneratorModal from '@/components/GeneratorModal';
 import LoginModal from '@/components/LoginModal';
-import { getSessionAction, logoutAction, getTemplatesAction, saveTemplateAction } from '@/app/actions';
+import { 
+  getSessionAction, 
+  logoutAction, 
+  getTemplatesAction, 
+  saveTemplateAction, 
+  getMyTemplatesAction, 
+  getPendingTemplatesAction, 
+  updateTemplateStatusAction 
+} from '@/app/actions';
 
 export default function Home() {
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -17,7 +25,7 @@ export default function Home() {
   
   // Auth & View State
   const [user, setUser] = useState<User | null>(null);
-  const [activeTab, setActiveTab] = useState<'gallery' | 'library'>('gallery');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'library' | 'review'>('gallery');
   const [columns, setColumns] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -57,7 +65,14 @@ export default function Home() {
   const loadTemplates = async () => {
       setIsLoading(true);
       try {
-          const data = await getTemplatesAction();
+          let data: Template[] = [];
+          if (activeTab === 'gallery') {
+              data = await getTemplatesAction();
+          } else if (activeTab === 'library') {
+              data = await getMyTemplatesAction();
+          } else if (activeTab === 'review') {
+              data = await getPendingTemplatesAction();
+          }
           setTemplates(data);
       } catch (e) {
           console.error("Failed to load templates", e);
@@ -66,10 +81,10 @@ export default function Home() {
       }
   };
 
-  // Load templates on mount
+  // Load templates on mount or tab change
   useEffect(() => {
     loadTemplates();
-  }, []);
+  }, [activeTab]);
 
   const handleOpenCreator = () => {
     setSelectedTemplate(null);
@@ -82,15 +97,46 @@ export default function Home() {
   };
 
   const handleSaveTemplate = async (newTemplate: Template) => {
-    // Optimistic update
-    setTemplates(prev => [newTemplate, ...prev]);
     try {
       // Actually save to Supabase
       await saveTemplateAction(newTemplate);
-      // Background reload to get real ID
-      loadTemplates();
+      // Reload templates
+      if (activeTab === 'library') {
+          loadTemplates();
+      } else {
+          // Ideally switch to library if user created it, or stay on gallery
+          // But if it's pending, it won't show on gallery.
+          // For now just reload current tab if applicable, or do nothing.
+          // If user is on gallery, they won't see it if it is pending.
+          if (user?.role === 'admin') {
+              loadTemplates(); // Admin sees it immediately in gallery
+          } else {
+             // Maybe switch to library to see pending status
+             setActiveTab('library');
+          }
+      }
     } catch (error) {
       console.error("Failed to save template:", error);
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    if (user?.role !== 'admin') return;
+    try {
+        await updateTemplateStatusAction(id, 'approved');
+        setTemplates(prev => prev.filter(t => t.id !== id));
+    } catch (error) {
+        console.error("Failed to approve:", error);
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    if (user?.role !== 'admin') return;
+    try {
+        await updateTemplateStatusAction(id, 'rejected');
+        setTemplates(prev => prev.filter(t => t.id !== id));
+    } catch (error) {
+        console.error("Failed to reject:", error);
     }
   };
 
@@ -103,14 +149,7 @@ export default function Home() {
                           t.prompt.toLowerCase().includes(query);
       if (!matchesSearch) return false;
     }
-
-    if (activeTab === 'gallery') {
-      // Show public templates
-      return t.isPublished || t.ownerId === 'system';
-    } else {
-      // Show my templates (public or private)
-      return user && t.ownerId === user.id;
-    }
+    return true; // Tab logic handles the main filtering now
   });
 
   // Distribute templates into columns for horizontal masonry
@@ -240,11 +279,20 @@ export default function Home() {
                     {activeTab !== 'library' && <Lock size={12} className="opacity-50" />}
                     My Library
                 </button>
+                {user?.role === 'admin' && (
+                    <button 
+                        onClick={() => setActiveTab('review')}
+                        className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'review' ? 'bg-white text-black shadow-lg' : 'text-neutral-500 hover:text-white'}`}
+                    >
+                        {activeTab !== 'review' && <ShieldCheck size={12} className="opacity-50" />}
+                        Review ({templates.length})
+                    </button>
+                )}
             </div>
 
             <div className="flex items-center gap-2 text-sm text-neutral-400">
                 <ImageIcon size={16} />
-                <span>{isLoading ? 'Loading...' : `${filteredTemplates.length} ${activeTab === 'gallery' ? 'Public' : 'Personal'} Styles`}</span>
+                <span>{isLoading ? 'Loading...' : `${filteredTemplates.length} ${activeTab === 'gallery' ? 'Public' : activeTab === 'review' ? 'Pending' : 'Personal'} Styles`}</span>
             </div>
         </div>
 
@@ -256,7 +304,10 @@ export default function Home() {
                         <TemplateCard 
                             key={template.id} 
                             template={template} 
-                            onSelect={handleSelectTemplate} 
+                            onSelect={handleSelectTemplate}
+                            onApprove={activeTab === 'review' ? handleApprove : undefined}
+                            onReject={activeTab === 'review' ? handleReject : undefined}
+                            showStatus={activeTab === 'library'}
                         />
                     ))}
                 </div>

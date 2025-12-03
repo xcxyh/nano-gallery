@@ -540,6 +540,16 @@ export async function saveTemplateAction(template: Template) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false };
 
+  // Check user role for auto-approval
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  const isAdmin = profile?.role === 'admin';
+  const status = isAdmin ? 'approved' : 'pending';
+
   // Convert FE Template model to DB columns
   const { error } = await supabase.from('templates').insert({
     title: template.title,
@@ -549,7 +559,8 @@ export async function saveTemplateAction(template: Template) {
     reference_image: template.referenceImage,
     author: template.author,
     owner_id: user.id,
-    is_published: template.isPublished
+    is_published: template.isPublished,
+    status: status
   });
 
   if (error) {
@@ -564,9 +575,11 @@ export async function saveTemplateAction(template: Template) {
 export async function getTemplatesAction() {
   const supabase = await createClient();
 
+  // Only fetch approved templates for public feed
   const { data, error } = await supabase
     .from('templates')
     .select('*')
+    .eq('status', 'approved')
     .order('created_at', { ascending: false });
 
   if (error) return [];
@@ -580,6 +593,99 @@ export async function getTemplatesAction() {
     referenceImage: t.reference_image,
     author: t.author,
     ownerId: t.owner_id,
-    isPublished: t.is_published
+    isPublished: t.is_published,
+    status: t.status
   })) as Template[];
+}
+
+export async function getMyTemplatesAction() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('templates')
+    .select('*')
+    .eq('owner_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+
+  return data.map((t: any) => ({
+    id: t.id.toString(),
+    title: t.title,
+    prompt: t.prompt,
+    aspectRatio: t.aspect_ratio,
+    imageUrl: t.image_url,
+    referenceImage: t.reference_image,
+    author: t.author,
+    ownerId: t.owner_id,
+    isPublished: t.is_published,
+    status: t.status
+  })) as Template[];
+}
+
+export async function getPendingTemplatesAction() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // Check if admin
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.role !== 'admin') return [];
+
+  const { data, error } = await supabase
+    .from('templates')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) return [];
+
+  return data.map((t: any) => ({
+    id: t.id.toString(),
+    title: t.title,
+    prompt: t.prompt,
+    aspectRatio: t.aspect_ratio,
+    imageUrl: t.image_url,
+    referenceImage: t.reference_image,
+    author: t.author,
+    ownerId: t.owner_id,
+    isPublished: t.is_published,
+    status: t.status
+  })) as Template[];
+}
+
+export async function updateTemplateStatusAction(templateId: string, status: 'approved' | 'rejected') {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "Unauthorized" };
+
+  // Check if admin
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+
+  if (profile?.role !== 'admin') return { success: false, error: "Forbidden" };
+
+  const { error } = await supabaseAdmin
+    .from('templates')
+    .update({ status: status })
+    .eq('id', templateId);
+
+  if (error) {
+    console.error("Update Status Error", error);
+    return { success: false, error: error.message };
+  }
+
+  revalidatePath('/');
+  return { success: true };
 }
