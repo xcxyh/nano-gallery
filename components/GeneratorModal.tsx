@@ -176,6 +176,15 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     }
   };
 
+  const isRemixChanged = initialTemplate && (
+    prompt.trim() !== initialTemplate.prompt.trim() ||
+    aspectRatio !== initialTemplate.aspectRatio ||
+    referenceImage !== (initialTemplate.referenceImage || null)
+  );
+
+  const isNewGeneration = initialTemplate ? generatedImage !== initialTemplate.imageUrl : true;
+  const showSaveButton = generatedImage && !isSaveMode && user && (!initialTemplate || (isRemixChanged && isNewGeneration));
+
   if (!isOpen) return null;
 
   return (
@@ -379,13 +388,13 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 </button>
             )}
 
-            {generatedImage && !isSaveMode && !initialTemplate && user && (
+            {showSaveButton && (
                 <button
                     onClick={() => setIsSaveMode(true)}
                     className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-neutral-800 text-white hover:bg-neutral-700 border border-neutral-700 hover:border-neutral-600 transition-all"
                 >
                     <Save size={18} />
-                    Save Template
+                    {initialTemplate ? 'Publish Remix' : 'Save Template'}
                 </button>
             )}
           </div>
