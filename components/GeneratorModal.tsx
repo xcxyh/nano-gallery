@@ -157,14 +157,18 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     onClose();
   };
 
-  const downloadImage = () => {
+  const downloadImage = async () => {
     if (!generatedImage) return;
+    const response = await fetch(generatedImage);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = generatedImage;
+    link.href = url;
     link.download = `nano-banana-${Date.now()}.png`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const handleCloseRequest = () => {
