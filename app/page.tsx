@@ -16,19 +16,51 @@ import {
   updateTemplateStatusAction 
 } from '@/app/actions';
 
+type TabData = {
+  items: Template[];
+  page: number;
+  hasMore: boolean;
+  lastSearch: string;
+  initialized: boolean;
+};
+
+const initialTabData: TabData = {
+  items: [],
+  page: 1,
+  hasMore: true,
+  lastSearch: '',
+  initialized: false
+};
+
 export default function Home() {
-  const [templates, setTemplates] = useState<Template[]>([]);
+  // Tabs Cache State
+  const [tabsData, setTabsData] = useState<Record<string, TabData>>({
+    gallery: { ...initialTabData },
+    library: { ...initialTabData },
+    review: { ...initialTabData },
+  });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
   
   // Auth & View State
   const [user, setUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<'gallery' | 'library' | 'review'>('gallery');
   const [columns, setColumns] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
+
+  // Derived state for current view
+  const currentTabState = tabsData[activeTab];
+  const templates = currentTabState.items;
+  const hasMore = currentTabState.hasMore;
+  // Show loading if we are fetching AND (it's the first load OR search changed)
+  // If we are just loading more, we show the button spinner, not the main loader
+  const isFirstLoad = !currentTabState.initialized || currentTabState.lastSearch !== debouncedSearchQuery;
+  const showMainLoading = isFetching && isFirstLoad;
 
   // Handle Resize for Masonry Layout
   useEffect(() => {
@@ -51,49 +83,96 @@ export default function Home() {
     });
   }, []);
 
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   const handleLoginSuccess = (newUser: User) => {
     setUser(newUser);
-    // Reload templates to see user's private library if needed
-    loadTemplates();
+    // Force reload library
+    loadTemplates(true, 'library');
+    // If we are currently on library, this will trigger update
   };
 
-  // Fetch pending count for admin
+  // Fetch pending count for admin (Initial only)
   useEffect(() => {
     if (user?.role === 'admin') {
       getPendingTemplatesAction().then(data => setPendingCount(data.length));
     }
-  }, [user, activeTab]);
+  }, [user]); // Removed activeTab dependency to avoid refetching on tab switch
 
   const handleLogout = async () => {
     await logoutAction();
     setUser(null);
     setActiveTab('gallery');
+    // Reset library cache
+    setTabsData(prev => ({
+        ...prev,
+        library: { ...initialTabData },
+        review: { ...initialTabData }
+    }));
   };
 
-  const loadTemplates = async () => {
-      setIsLoading(true);
-      setTemplates([]); // Clear current templates to hide them while loading
+  const loadTemplates = async (reset = false, tabOverride?: string) => {
+      const targetTab = tabOverride || activeTab;
+      const currentData = tabsData[targetTab];
+      
+      // Prevent multiple fetches if already fetching (basic lock)
+      // Note: In a real app we might use AbortController
+      if (isFetching && !reset) return; 
+
+      setIsFetching(true);
+
       try {
+          const currentPage = reset ? 1 : currentData.page + 1;
+          const limit = 20;
+          const searchToUse = debouncedSearchQuery; 
+
           let data: Template[] = [];
-          if (activeTab === 'gallery') {
-              data = await getTemplatesAction();
-          } else if (activeTab === 'library') {
-              data = await getMyTemplatesAction();
-          } else if (activeTab === 'review') {
-              data = await getPendingTemplatesAction();
+          if (targetTab === 'gallery') {
+              data = await getTemplatesAction(currentPage, limit, searchToUse);
+          } else if (targetTab === 'library') {
+              data = await getMyTemplatesAction(currentPage, limit, searchToUse);
+          } else if (targetTab === 'review') {
+              data = await getPendingTemplatesAction(currentPage, limit, searchToUse);
           }
-          setTemplates(data);
+          
+          // If we got fewer items than limit, no more items
+          const newHasMore = data.length === limit; 
+
+          setTabsData(prev => ({
+              ...prev,
+              [targetTab]: {
+                  items: reset ? data : [...prev[targetTab].items, ...data],
+                  page: currentPage,
+                  hasMore: newHasMore,
+                  lastSearch: searchToUse,
+                  initialized: true
+              }
+          }));
+
       } catch (e) {
           console.error("Failed to load templates", e);
       } finally {
-          setIsLoading(false);
+          setIsFetching(false);
       }
   };
 
-  // Load templates on mount or tab change
+  // Load templates on mount or tab change or search change
   useEffect(() => {
-    loadTemplates();
-  }, [activeTab]);
+    const currentData = tabsData[activeTab];
+    const searchChanged = currentData.lastSearch !== debouncedSearchQuery;
+    
+    // If not initialized OR search criteria changed, reload
+    // Otherwise, use cache (do nothing)
+    if (!currentData.initialized || searchChanged) {
+        loadTemplates(true);
+    }
+  }, [activeTab, debouncedSearchQuery]);
 
   const handleOpenCreator = () => {
     setSelectedTemplate(null);
@@ -107,22 +186,27 @@ export default function Home() {
 
   const handleSaveTemplate = async (newTemplate: Template) => {
     try {
-      // Actually save to Supabase
       await saveTemplateAction(newTemplate);
-      // Reload templates
+      // If user is admin, gallery might need update. 
+      // If user is normal, library needs update.
+      // Easiest is to invalidate caches.
+      
+      setTabsData(prev => ({
+          ...prev,
+          library: { ...prev.library, initialized: false }, // Mark dirty
+          gallery: { ...prev.gallery, initialized: false }  // Mark dirty
+      }));
+
       if (activeTab === 'library') {
-          loadTemplates();
-      } else {
-          // Ideally switch to library if user created it, or stay on gallery
-          // But if it's pending, it won't show on gallery.
-          // For now just reload current tab if applicable, or do nothing.
-          // If user is on gallery, they won't see it if it is pending.
-          if (user?.role === 'admin') {
-              loadTemplates(); // Admin sees it immediately in gallery
-          } else {
-             // Maybe switch to library to see pending status
-             setActiveTab('library');
-          }
+          loadTemplates(true, 'library');
+      } else if (activeTab === 'gallery') {
+           // If admin, it appears in gallery
+           if (user?.role === 'admin') {
+               loadTemplates(true, 'gallery');
+           } else {
+               // Switch to library to see it
+               setActiveTab('library');
+           }
       }
     } catch (error) {
       console.error("Failed to save template:", error);
@@ -133,7 +217,16 @@ export default function Home() {
     if (user?.role !== 'admin') return;
     try {
         await updateTemplateStatusAction(id, 'approved');
-        setTemplates(prev => prev.filter(t => t.id !== id));
+        // Update Review Cache: Remove item
+        setTabsData(prev => ({
+            ...prev,
+            review: {
+                ...prev.review,
+                items: prev.review.items.filter(t => t.id !== id)
+            },
+            // Gallery Cache: Mark dirty so it reloads when visited
+            gallery: { ...prev.gallery, initialized: false }
+        }));
         setPendingCount(prev => Math.max(0, prev - 1));
     } catch (error) {
         console.error("Failed to approve:", error);
@@ -144,29 +237,24 @@ export default function Home() {
     if (user?.role !== 'admin') return;
     try {
         await updateTemplateStatusAction(id, 'rejected');
-        setTemplates(prev => prev.filter(t => t.id !== id));
+        // Update Review Cache: Remove item
+        setTabsData(prev => ({
+            ...prev,
+            review: {
+                ...prev.review,
+                items: prev.review.items.filter(t => t.id !== id)
+            }
+        }));
         setPendingCount(prev => Math.max(0, prev - 1));
     } catch (error) {
         console.error("Failed to reject:", error);
     }
   };
 
-  // Filter Logic
-  const filteredTemplates = templates.filter(t => {
-    // Search Filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      const matchesSearch = t.title.toLowerCase().includes(query) || 
-                          t.prompt.toLowerCase().includes(query);
-      if (!matchesSearch) return false;
-    }
-    return true; // Tab logic handles the main filtering now
-  });
-
   // Distribute templates into columns for horizontal masonry
   const getColumns = () => {
     const cols = Array.from({ length: columns }, () => [] as Template[]);
-    filteredTemplates.forEach((t, i) => {
+    templates.forEach((t, i) => {
       cols[i % columns].push(t);
     });
     return cols;
@@ -303,7 +391,7 @@ export default function Home() {
 
             <div className="flex items-center gap-2 text-sm text-neutral-400">
                 <ImageIcon size={16} />
-                <span>{isLoading ? 'Loading...' : `${filteredTemplates.length} ${activeTab === 'gallery' ? 'Public' : activeTab === 'review' ? 'Pending' : 'Personal'} Styles`}</span>
+                <span>{showMainLoading ? 'Loading...' : `${templates.length} ${activeTab === 'gallery' ? 'Public' : activeTab === 'review' ? 'Pending' : 'Personal'} Styles`}</span>
             </div>
         </div>
 
@@ -325,8 +413,28 @@ export default function Home() {
             ))}
         </div>
 
+        {/* Load More Button */}
+        {!showMainLoading && hasMore && templates.length > 0 && (
+            <div className="flex justify-center mt-12 mb-8">
+                <button
+                    onClick={() => loadTemplates(false)}
+                    disabled={isFetching}
+                    className="px-8 py-3 bg-neutral-900 border border-neutral-800 rounded-full text-white font-medium hover:bg-neutral-800 hover:border-neutral-700 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {isFetching ? (
+                        <>
+                            <div className="animate-spin w-4 h-4 border-2 border-white/50 border-t-white rounded-full"></div>
+                            Loading...
+                        </>
+                    ) : (
+                        'Load More'
+                    )}
+                </button>
+            </div>
+        )}
+
         {/* Loading State */}
-        {isLoading && (
+        {showMainLoading && (
            <div className="text-center py-20">
               <div className="animate-spin w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full mx-auto mb-4"></div>
               <p className="text-neutral-500">Loading gallery...</p>
@@ -334,7 +442,7 @@ export default function Home() {
         )}
 
         {/* Empty State */}
-        {!isLoading && filteredTemplates.length === 0 && (
+        {!showMainLoading && templates.length === 0 && (
             <div className="text-center py-20 border border-dashed border-neutral-800 rounded-3xl bg-neutral-900/20 break-inside-avoid">
                 <div className="w-16 h-16 bg-neutral-900 rounded-2xl flex items-center justify-center mx-auto mb-4 text-neutral-700">
                     <LayoutGrid size={32} />

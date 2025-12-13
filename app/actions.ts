@@ -572,15 +572,27 @@ export async function saveTemplateAction(template: Template) {
   return { success: true };
 }
 
-export async function getTemplatesAction() {
+export async function getTemplatesAction(page: number = 1, limit: number = 20, search: string = '') {
   const supabase = await createClient();
+  
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
-  // Only fetch approved templates for public feed
-  const { data, error } = await supabase
+  // Start building query
+  let query = supabase
     .from('templates')
     .select('*')
-    .eq('status', 'approved')
-    .order('created_at', { ascending: false });
+    .eq('status', 'approved');
+
+  // Add search filter if provided
+  if (search) {
+    query = query.or(`title.ilike.%${search}%,prompt.ilike.%${search}%`);
+  }
+
+  // Finalize query
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) return [];
 
@@ -598,17 +610,27 @@ export async function getTemplatesAction() {
   })) as Template[];
 }
 
-export async function getMyTemplatesAction() {
+export async function getMyTemplatesAction(page: number = 1, limit: number = 20, search: string = '') {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   
   if (!user) return [];
 
-  const { data, error } = await supabase
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  let query = supabase
     .from('templates')
     .select('*')
-    .eq('owner_id', user.id)
-    .order('created_at', { ascending: false });
+    .eq('owner_id', user.id);
+
+  if (search) {
+    query = query.or(`title.ilike.%${search}%,prompt.ilike.%${search}%`);
+  }
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) return [];
 
@@ -626,7 +648,7 @@ export async function getMyTemplatesAction() {
   })) as Template[];
 }
 
-export async function getPendingTemplatesAction() {
+export async function getPendingTemplatesAction(page: number = 1, limit: number = 20, search: string = '') {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
@@ -640,11 +662,21 @@ export async function getPendingTemplatesAction() {
 
   if (profile?.role !== 'admin') return [];
 
-  const { data, error } = await supabase
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  let query = supabase
     .from('templates')
     .select('*')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: false });
+    .eq('status', 'pending');
+
+  if (search) {
+    query = query.or(`title.ilike.%${search}%,prompt.ilike.%${search}%`);
+  }
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
 
   if (error) return [];
 
