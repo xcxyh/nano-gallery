@@ -12,7 +12,8 @@ export interface Template {
   prompt: string;
   aspectRatio: AspectRatio;
   imageUrl?: string;
-  referenceImage?: string; // Base64 string of the input image
+  referenceImage?: string; // Base64 string of the input image (Legacy)
+  referenceImages?: string[]; // Array of Base64 strings
   author?: string;
   ownerId?: string; // 'system' or user.id
   isPublished?: boolean;
@@ -26,7 +27,8 @@ export interface GenerationConfig {
   prompt: string;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
-  referenceImage?: string; // Base64 string for generation
+  referenceImage?: string; // Base64 string for generation (Legacy support)
+  referenceImages?: string[]; // Array of Base64 strings for generation
 }
 
 export interface SessionPayload {

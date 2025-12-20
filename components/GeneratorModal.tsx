@@ -29,7 +29,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
-  const [referenceImage, setReferenceImage] = useState<string | null>(null);
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
   
   // generatedImage stores Base64 for display, remoteImageUrl stores Supabase URL for DB saving
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
@@ -61,15 +61,21 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         setAspectRatio(initialTemplate.aspectRatio);
         setGeneratedImage(initialTemplate.imageUrl || null);
         setRemoteImageUrl(initialTemplate.imageUrl || null);
-        setReferenceImage(initialTemplate.referenceImage || null);
+        setReferenceImages(
+          initialTemplate.referenceImages && initialTemplate.referenceImages.length > 0
+            ? initialTemplate.referenceImages
+            : initialTemplate.referenceImage
+              ? [initialTemplate.referenceImage]
+              : []
+        );
         setNewTitle(initialTemplate.title + " (Remix)");
-        setShowRefInput(!!initialTemplate.referenceImage);
+        setShowRefInput(!!(initialTemplate.referenceImage || (initialTemplate.referenceImages && initialTemplate.referenceImages.length > 0)));
       } else {
         setPrompt('');
         setAspectRatio("1:1");
         setGeneratedImage(null);
         setRemoteImageUrl(null);
-        setReferenceImage(null);
+        setReferenceImages([]);
         setNewTitle('');
         setShowRefInput(false);
       }
@@ -80,15 +86,27 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     }
   }, [isOpen, initialTemplate]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setReferenceImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const filePromises = Array.from(files).map(file => {
+      return new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+           resolve(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+      });
+    });
+
+    const results = await Promise.all(filePromises);
+    setReferenceImages(prev => [...prev, ...results]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeReferenceImage = (index: number) => {
+    setReferenceImages(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleGenerate = async () => {
@@ -115,7 +133,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         prompt,
         aspectRatio,
         imageSize,
-        referenceImage: referenceImage || undefined
+        referenceImages: referenceImages.length > 0 ? referenceImages : undefined
       });
 
       if (!result.success || !result.imageBase64) {
@@ -147,7 +165,8 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
       prompt,
       aspectRatio,
       imageUrl: remoteImageUrl || generatedImage, // Prefer remote URL for saving
-      referenceImage: referenceImage || undefined,
+      referenceImage: referenceImages.length > 0 ? referenceImages[0] : undefined,
+      referenceImages: referenceImages.length > 0 ? referenceImages : undefined,
       author: user.name,
       ownerId: user.id,
       isPublished: isPublished
@@ -183,7 +202,10 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const isRemixChanged = initialTemplate && (
     prompt.trim() !== initialTemplate.prompt.trim() ||
     aspectRatio !== initialTemplate.aspectRatio ||
-    referenceImage !== (initialTemplate.referenceImage || null)
+    JSON.stringify(referenceImages) !== JSON.stringify(
+      initialTemplate.referenceImages || 
+      (initialTemplate.referenceImage ? [initialTemplate.referenceImage] : [])
+    )
   );
 
   const isNewGeneration = initialTemplate ? generatedImage !== initialTemplate.imageUrl : true;
@@ -247,7 +269,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
 
             <div>
                <div className="flex items-center justify-between mb-3">
-                 <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Reference Image</label>
+                 <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Reference Images</label>
                  <button 
                    onClick={() => setShowRefInput(!showRefInput)}
                    className={`text-[10px] px-2 py-1 rounded border transition-colors ${
@@ -256,45 +278,48 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                        : 'bg-neutral-900 text-neutral-500 border-neutral-800 hover:text-neutral-300'
                    }`}
                  >
-                   {showRefInput ? 'Enabled' : 'Add Reference'}
+                   {showRefInput ? 'Enabled' : 'Add References'}
                  </button>
                </div>
                
                {showRefInput && (
-                 <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                   {!referenceImage ? (
-                     <div 
-                       onClick={() => fileInputRef.current?.click()}
-                       className="w-full h-24 border border-dashed border-neutral-700 hover:border-neutral-500 hover:bg-neutral-900/50 rounded-xl flex items-center justify-center gap-3 cursor-pointer transition-all group"
-                     >
-                       <div className="p-2 bg-neutral-800 rounded-lg group-hover:scale-110 transition-transform">
-                         <ImagePlus size={18} className="text-neutral-400" />
-                       </div>
-                       <span className="text-sm text-neutral-500 group-hover:text-neutral-300">Upload Image</span>
+                 <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
+                   <div 
+                     onClick={() => fileInputRef.current?.click()}
+                     className="w-full h-20 border border-dashed border-neutral-700 hover:border-neutral-500 hover:bg-neutral-900/50 rounded-xl flex items-center justify-center gap-3 cursor-pointer transition-all group"
+                   >
+                     <div className="p-2 bg-neutral-800 rounded-lg group-hover:scale-110 transition-transform">
+                       <ImagePlus size={16} className="text-neutral-400" />
                      </div>
-                   ) : (
-                     <div className="relative w-full h-40 bg-neutral-900 rounded-xl border border-neutral-800 overflow-hidden group">
-                       <img 
-                         src={referenceImage} 
-                         alt="Reference" 
-                         className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity"
-                       />
-                       <button 
-                         onClick={() => {
-                            setReferenceImage(null);
-                            if (fileInputRef.current) fileInputRef.current.value = '';
-                         }}
-                         className="absolute top-2 right-2 p-1.5 bg-black/50 hover:bg-red-500/80 text-white rounded-lg backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100"
-                       >
-                         <Trash2 size={14} />
-                       </button>
+                     <span className="text-xs text-neutral-500 group-hover:text-neutral-300">Add Images</span>
+                   </div>
+                   
+                   {referenceImages.length > 0 && (
+                     <div className="grid grid-cols-3 gap-2">
+                       {referenceImages.map((img, idx) => (
+                         <div key={idx} className="relative aspect-square bg-neutral-900 rounded-lg border border-neutral-800 overflow-hidden group">
+                           <img 
+                             src={img} 
+                             alt={`Ref ${idx}`} 
+                             className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+                           />
+                           <button 
+                             onClick={() => removeReferenceImage(idx)}
+                             className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-red-500/80 text-white rounded-md backdrop-blur-sm transition-colors opacity-0 group-hover:opacity-100"
+                           >
+                             <Trash2 size={12} />
+                           </button>
+                         </div>
+                       ))}
                      </div>
                    )}
+                   
                    <input 
                      type="file" 
                      ref={fileInputRef} 
                      onChange={handleFileChange} 
                      accept="image/*" 
+                     multiple
                      className="hidden" 
                    />
                  </div>

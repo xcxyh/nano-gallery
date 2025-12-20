@@ -422,8 +422,19 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
   try {
     const parts: Part[] = [{ text: config.prompt }];
 
-    // Handle reference image if needed
-    if (config.referenceImage) {
+    // Handle reference images
+    if (config.referenceImages && config.referenceImages.length > 0) {
+      config.referenceImages.forEach(image => {
+        const [metadata, base64Data] = image.split(',');
+        const mimeType = metadata.match(/:(.*?);/)?.[1] || 'image/png';
+        parts.push({
+          inlineData: {
+            data: base64Data,
+            mimeType
+          }
+        });
+      });
+    } else if (config.referenceImage) { // Legacy fallback
       const [metadata, base64Data] = config.referenceImage.split(',');
       const mimeType = metadata.match(/:(.*?);/)?.[1] || 'image/png';
       parts.push({ 
@@ -432,7 +443,7 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
           mimeType 
         } 
       });
-  }
+    }
 
     console.log("Calling Gemini API with model:", MODEL_NAME);
     console.log("Prompt length:", config.prompt.length);
@@ -551,21 +562,37 @@ export async function saveTemplateAction(template: Template) {
   const status = isAdmin ? 'approved' : 'pending';
 
   // Convert FE Template model to DB columns
-  const { error } = await supabase.from('templates').insert({
+  const templateData = {
     title: template.title,
     prompt: template.prompt,
     aspect_ratio: template.aspectRatio,
     image_url: template.imageUrl,
     reference_image: template.referenceImage,
+    reference_images: template.referenceImages,
     author: template.author,
     owner_id: user.id,
     is_published: template.isPublished,
     status: status
-  });
+  };
+
+  const { error } = await supabase.from('templates').insert(templateData);
 
   if (error) {
-    console.error("Save Error", error);
-    return { success: false, error: error.message };
+    // Check for missing column error and fallback
+    if (error.code === '42703' || error.message.includes('column "reference_images" of relation "templates" does not exist')) {
+      console.warn("Column reference_images missing, falling back to legacy insert");
+      const legacyData = { ...templateData };
+      delete (legacyData as any).reference_images;
+      
+      const { error: retryError } = await supabase.from('templates').insert(legacyData);
+      if (retryError) {
+        console.error("Save Error (Retry)", retryError);
+        return { success: false, error: retryError.message };
+      }
+    } else {
+      console.error("Save Error", error);
+      return { success: false, error: error.message };
+    }
   }
 
   revalidatePath('/');
@@ -603,6 +630,7 @@ export async function getTemplatesAction(page: number = 1, limit: number = 20, s
     aspectRatio: t.aspect_ratio,
     imageUrl: t.image_url,
     referenceImage: t.reference_image,
+    referenceImages: t.reference_images,
     author: t.author,
     ownerId: t.owner_id,
     isPublished: t.is_published,
@@ -641,6 +669,7 @@ export async function getMyTemplatesAction(page: number = 1, limit: number = 20,
     aspectRatio: t.aspect_ratio,
     imageUrl: t.image_url,
     referenceImage: t.reference_image,
+    referenceImages: t.reference_images,
     author: t.author,
     ownerId: t.owner_id,
     isPublished: t.is_published,
@@ -687,6 +716,7 @@ export async function getPendingTemplatesAction(page: number = 1, limit: number 
     aspectRatio: t.aspect_ratio,
     imageUrl: t.image_url,
     referenceImage: t.reference_image,
+    referenceImages: t.reference_images,
     author: t.author,
     ownerId: t.owner_id,
     isPublished: t.is_published,
