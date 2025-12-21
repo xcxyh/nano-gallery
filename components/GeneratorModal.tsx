@@ -29,11 +29,15 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
+  const [imageCount, setImageCount] = useState<number>(1);
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
   
   // generatedImage stores Base64 for display, remoteImageUrl stores Supabase URL for DB saving
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
-  const [remoteImageUrl, setRemoteImageUrl] = useState<string | null>(null);
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null); // Main/First image
+  const [remoteImageUrl, setRemoteImageUrl] = useState<string | null>(null); // Main/First image remote URL
+  
+  const [generatedImages, setGeneratedImages] = useState<string[]>([]); // All generated images (Base64)
+  const [remoteImageUrls, setRemoteImageUrls] = useState<string[]>([]); // All generated images (Remote URLs)
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,9 +51,10 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getCost = () => {
-    if (imageSize === "2K") return 2;
-    if (imageSize === "4K") return 4;
-    return 1;
+    let baseCost = 1;
+    if (imageSize === "2K") baseCost = 2;
+    if (imageSize === "4K") baseCost = 4;
+    return baseCost * imageCount;
   };
 
   const cost = getCost();
@@ -75,7 +80,10 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         setAspectRatio("1:1");
         setGeneratedImage(null);
         setRemoteImageUrl(null);
+        setGeneratedImages([]);
+        setRemoteImageUrls([]);
         setReferenceImages([]);
+        setImageCount(1);
         setNewTitle('');
         setShowRefInput(false);
       }
@@ -126,6 +134,8 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     setError(null);
     setGeneratedImage(null);
     setRemoteImageUrl(null);
+    setGeneratedImages([]);
+    setRemoteImageUrls([]);
 
     try {
       // Call Server Action
@@ -133,15 +143,28 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         prompt,
         aspectRatio,
         imageSize,
+        imageCount,
         referenceImages: referenceImages.length > 0 ? referenceImages : undefined
       });
 
-      if (!result.success || !result.imageBase64) {
+      if (!result.success) {
         throw new Error(result.error || "Generation failed");
       }
 
-      setGeneratedImage(result.imageBase64);
-      setRemoteImageUrl(result.imageUrl || result.imageBase64); // Fallback to base64 if URL not present
+      if (result.images && result.images.length > 0) {
+        setGeneratedImages(result.images.map(img => img.base64));
+        setRemoteImageUrls(result.images.map(img => img.url));
+        setGeneratedImage(result.images[0].base64);
+        setRemoteImageUrl(result.images[0].url);
+      } else if (result.imageBase64) {
+        setGeneratedImage(result.imageBase64);
+        setRemoteImageUrl(result.imageUrl || result.imageBase64);
+        setGeneratedImages([result.imageBase64]);
+        setRemoteImageUrls([result.imageUrl || result.imageBase64]);
+      } else {
+        throw new Error("No image data received");
+      }
+
       setIsSaveMode(false);
       
       // Update local user state from server response to reflect deducted credit immediately
@@ -176,18 +199,23 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     onClose();
   };
 
-  const downloadImage = async () => {
-    if (!generatedImage) return;
-    const response = await fetch(generatedImage);
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `nano-banana-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+  const downloadImage = async (imgSrc?: string) => {
+    const targetImage = imgSrc || generatedImage;
+    if (!targetImage) return;
+    try {
+      const response = await fetch(targetImage);
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `nano-banana-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("Download failed", e);
+    }
   };
 
   const handleCloseRequest = () => {
@@ -345,17 +373,37 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                   ))}
                 </div>
               </div>
-               <div>
-                <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Quality</label>
-                <select 
-                  value={imageSize}
-                  onChange={(e) => setImageSize(e.target.value as ImageSize)}
-                  className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-sm text-white focus:outline-none"
-                >
-                  <option value="1K">Standard (1K)</option>
-                  <option value="2K">High (2K)</option>
-                  <option value="4K">Ultra (4K)</option>
-                </select>
+               <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Quality</label>
+                  <select 
+                    value={imageSize}
+                    onChange={(e) => setImageSize(e.target.value as ImageSize)}
+                    className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-sm text-white focus:outline-none"
+                  >
+                    <option value="1K">Standard (1K)</option>
+                    <option value="2K">High (2K)</option>
+                    <option value="4K">Ultra (4K)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Count</label>
+                  <div className="flex gap-2">
+                    {[1, 2, 3].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => setImageCount(num)}
+                        className={`flex-1 py-2 text-xs rounded-lg border transition-all ${
+                          imageCount === num
+                            ? 'bg-neutral-100 text-black border-neutral-100 font-bold'
+                            : 'bg-neutral-900 text-neutral-400 border-neutral-800 hover:border-neutral-600'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -435,23 +483,44 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
           </div>
 
-          {generatedImage ? (
-            <div className="relative group max-h-full max-w-full shadow-2xl rounded-lg overflow-hidden flex items-center justify-center w-full h-full">
-               <img 
-                 src={generatedImage} 
-                 alt="Generated Result" 
-                 className={`max-h-[75vh] w-auto max-w-full object-contain rounded-lg border border-neutral-800 shadow-2xl`}
-               />
-               <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button 
-                    onClick={downloadImage}
-                    className="p-2 bg-black/50 hover:bg-black/80 text-white rounded-lg backdrop-blur-sm transition-colors"
-                    title="Download"
-                  >
-                    <Download size={20} />
-                  </button>
-               </div>
-            </div>
+          {generatedImages.length > 0 ? (
+             <div className={`grid gap-4 w-full h-full overflow-y-auto p-4 custom-scrollbar ${
+                generatedImages.length === 1 ? 'place-items-center' : 
+                generatedImages.length === 2 ? 'grid-cols-2' : 
+                'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
+             }`}>
+               {generatedImages.map((img, idx) => (
+                 <div key={idx} className={`relative group shadow-2xl rounded-lg overflow-hidden flex items-center justify-center ${generatedImages.length === 1 ? 'max-h-[75vh]' : 'aspect-square'}`}>
+                    <img 
+                      src={img} 
+                      alt={`Generated Result ${idx + 1}`} 
+                      className={`${generatedImages.length === 1 ? 'max-h-[75vh] w-auto' : 'w-full h-full object-cover'} max-w-full object-contain rounded-lg border border-neutral-800 shadow-2xl cursor-pointer`}
+                      onClick={() => {
+                          setGeneratedImage(img);
+                          setRemoteImageUrl(remoteImageUrls[idx]);
+                      }}
+                    />
+                    <div className="absolute top-4 right-4 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        <button 
+                          onClick={(e) => {
+                              e.stopPropagation();
+                              downloadImage(img);
+                          }}
+                          className="p-2 bg-black/50 hover:bg-black/80 text-white rounded-lg backdrop-blur-sm transition-colors"
+                          title="Download"
+                        >
+                          <Download size={20} />
+                        </button>
+                    </div>
+                    {/* Selection Indicator if multiple */}
+                    {generatedImages.length > 1 && generatedImage === img && (
+                        <div className="absolute top-4 left-4 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none">
+                            SELECTED
+                        </div>
+                    )}
+                 </div>
+               ))}
+             </div>
           ) : (
             <div className="text-center text-neutral-500 flex flex-col items-center gap-4">
               <div className="w-24 h-24 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center">

@@ -27,6 +27,7 @@ export interface GenerationConfig {
   prompt: string;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
+  imageCount?: number; // Number of images to generate (1-3)
   referenceImage?: string; // Base64 string for generation (Legacy support)
   referenceImages?: string[]; // Array of Base64 strings for generation
 }

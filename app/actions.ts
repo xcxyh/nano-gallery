@@ -378,7 +378,14 @@ export async function getSessionAction() {
 
 // --- Generation Action ---
 
-export async function generateImageAction(config: GenerationConfig): Promise<{ success: boolean; imageBase64?: string; imageUrl?: string; error?: string; remainingCredits?: number }> {
+export async function generateImageAction(config: GenerationConfig): Promise<{ 
+  success: boolean; 
+  imageBase64?: string; 
+  imageUrl?: string; 
+  images?: { base64: string; url: string }[];
+  error?: string; 
+  remainingCredits?: number 
+}> {
   const supabase = await createClient();
 
   // 1. Verify User
@@ -396,13 +403,16 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 
   if (!profile) return { success: false, error: "Profile not found" };
 
-  // Calculate cost based on image size
-  let cost = 1;
-  if (config.imageSize === '2K') cost = 2;
-  if (config.imageSize === '4K') cost = 4;
+  // Calculate cost based on image size and count
+  const imageCount = Math.min(Math.max(config.imageCount || 1, 1), 3);
+  let costPerImage = 1;
+  if (config.imageSize === '2K') costPerImage = 2;
+  if (config.imageSize === '4K') costPerImage = 4;
 
-  if (profile.role !== 'admin' && profile.credits < cost) {
-    return { success: false, error: `Insufficient credits. Need ${cost} credits, but you have ${profile.credits}.` };
+  const totalCost = costPerImage * imageCount;
+
+  if (profile.role !== 'admin' && profile.credits < totalCost) {
+    return { success: false, error: `Insufficient credits. Need ${totalCost} credits, but you have ${profile.credits}.` };
   }
 
   // 3. Call Gemini API
@@ -447,55 +457,77 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 
     console.log("Calling Gemini API with model:", MODEL_NAME);
     console.log("Prompt length:", config.prompt.length);
+    console.log("Generating images:", imageCount);
 
-    const response: GenerateContentResponse = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: { parts },
-      config: {
-        imageConfig: {
-          aspectRatio: config.aspectRatio,
-          imageSize: config.imageSize
+    // Generate multiple images in parallel
+    const generatePromises = Array(imageCount).fill(0).map(() => 
+      ai.models.generateContent({
+        model: MODEL_NAME,
+        contents: { parts },
+        config: {
+          imageConfig: {
+            aspectRatio: config.aspectRatio,
+            imageSize: config.imageSize
+          }
         }
-      }
-    });
-    
-    if (!response.candidates || response.candidates.length === 0) {
-      throw new Error("No candidates returned from the model.");
-    }
-    console.log("generateContent response:", response);
-    const content = response.candidates[0].content;
-    
-    // Find image part, do not assume it is the first part
-    let base64Image = "";
-    if (content && content.parts) {
-      for (const part of content.parts) {
-        if (part.inlineData && part.inlineData.data) {
-          base64Image = part.inlineData.data;
-          break; 
+      })
+    );
+
+    const responses = await Promise.all(generatePromises);
+    const generatedImages: { base64: string; url: string }[] = [];
+
+    for (const response of responses) {
+        if (!response.candidates || response.candidates.length === 0) {
+          // One failed, maybe skip or throw? throw for now
+          throw new Error("No candidates returned from the model.");
         }
-      }
+        
+        const content = response.candidates[0].content;
+        let base64Image = "";
+        
+        if (content && content.parts) {
+          for (const part of content.parts) {
+            if (part.inlineData && part.inlineData.data) {
+              base64Image = part.inlineData.data;
+              break; 
+            }
+          }
+        }
+
+        if (!base64Image) continue; // Skip if this one failed but others might succeed? Or fail all? 
+        // For robustness, let's process what we got.
+
+        // 4. Upload to Supabase Storage
+        const buffer = Buffer.from(base64Image, 'base64');
+        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.png`;
+
+        const { error: uploadError } = await supabaseAdmin.storage
+          .from('images')
+          .upload(fileName, buffer, { contentType: 'image/png' });
+
+        if (uploadError) {
+            console.error("Failed to upload image:", uploadError);
+            continue;
+        }
+
+        const { data: { publicUrl } } = supabaseAdmin.storage
+          .from('images')
+          .getPublicUrl(fileName);
+        
+        generatedImages.push({
+            base64: `data:image/png;base64,${base64Image}`,
+            url: publicUrl
+        });
     }
 
-    if (!base64Image) throw new Error("No image generated");
-
-    // 4. Upload to Supabase Storage
-    const buffer = Buffer.from(base64Image, 'base64');
-    const fileName = `${user.id}/${Date.now()}.png`;
-
-    const { error: uploadError } = await supabaseAdmin.storage
-      .from('images')
-      .upload(fileName, buffer, { contentType: 'image/png' });
-
-    if (uploadError) throw new Error("Failed to upload image: " + uploadError.message);
-
-    const { data: { publicUrl } } = supabaseAdmin.storage
-      .from('images')
-      .getPublicUrl(fileName);
+    if (generatedImages.length === 0) {
+        throw new Error("Failed to generate any images.");
+    }
 
     // 5. Deduct Credits
     let newCredits = profile.credits;
     if (profile.role !== 'admin') {
-      newCredits = Math.max(0, profile.credits - cost);
+      newCredits = Math.max(0, profile.credits - totalCost);
       const { error: updateError } = await supabaseAdmin
         .from('profiles')
         .update({ credits: newCredits })
@@ -503,8 +535,6 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 
       if (updateError) {
         console.error("Failed to update credits:", updateError);
-        // 即使更新失败，也返回成功（因为图片已生成）
-        // 但记录错误以便后续处理
       } else {
         console.log("Credits updated successfully:", newCredits);
       }
@@ -512,8 +542,9 @@ export async function generateImageAction(config: GenerationConfig): Promise<{ s
 
     return {
       success: true,
-      imageBase64: `data:image/png;base64,${base64Image}`,
-      imageUrl: publicUrl,
+      imageBase64: generatedImages[0].base64, // Backward compatibility
+      imageUrl: generatedImages[0].url, // Backward compatibility
+      images: generatedImages,
       remainingCredits: newCredits
     };
 

@@ -26,6 +26,7 @@ export interface GenerationConfig {
   prompt: string;
   aspectRatio: AspectRatio;
   imageSize: ImageSize;
+  imageCount?: number;
   referenceImage?: string;
 }
 
