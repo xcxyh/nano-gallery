@@ -47,7 +47,8 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const [isSaveMode, setIsSaveMode] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [isPublished, setIsPublished] = useState(true);
-  
+  const [mobileView, setMobileView] = useState<'controls' | 'preview'>('controls');
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const getCost = () => {
@@ -66,6 +67,8 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         setAspectRatio(initialTemplate.aspectRatio);
         setGeneratedImage(initialTemplate.imageUrl || null);
         setRemoteImageUrl(initialTemplate.imageUrl || null);
+        setGeneratedImages([]);
+        setRemoteImageUrls([]);
         setReferenceImages(
           initialTemplate.referenceImages && initialTemplate.referenceImages.length > 0
             ? initialTemplate.referenceImages
@@ -75,6 +78,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         );
         setNewTitle(initialTemplate.title + " (Remix)");
         setShowRefInput(!!(initialTemplate.referenceImage || (initialTemplate.referenceImages && initialTemplate.referenceImages.length > 0)));
+        setMobileView('controls');
       } else {
         setPrompt('');
         setAspectRatio("1:1");
@@ -86,6 +90,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         setImageCount(1);
         setNewTitle('');
         setShowRefInput(false);
+        setMobileView('controls');
       }
       setIsSaveMode(false);
       setError(null);
@@ -239,6 +244,13 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
   const isNewGeneration = initialTemplate ? generatedImage !== initialTemplate.imageUrl : true;
   const showSaveButton = generatedImage && !isSaveMode && user && (!initialTemplate || (isRemixChanged && isNewGeneration));
 
+  // Reset mobile view when generating
+  useEffect(() => {
+    if (generatedImages.length > 0) {
+      setMobileView('preview');
+    }
+  }, [generatedImages]);
+
   if (!isOpen) return null;
 
   return (
@@ -249,7 +261,34 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
       />
       
       <div className="relative w-full max-w-6xl bg-[#0f0f0f] border border-neutral-800 rounded-3xl shadow-2xl flex flex-col md:flex-row overflow-hidden max-h-[90vh]">
-        
+
+        {/* Mobile View Toggle */}
+        <div className="md:hidden flex border-b border-neutral-800 bg-neutral-900/50">
+          <button
+            onClick={() => setMobileView('controls')}
+            className={`flex-1 py-3 text-sm font-medium transition-colors ${
+              mobileView === 'controls'
+                ? 'text-white border-b-2 border-white bg-neutral-900'
+                : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+          >
+            Parameters
+          </button>
+          <button
+            onClick={() => setMobileView('preview')}
+            className={`flex-1 py-3 text-sm font-medium transition-colors relative ${
+              mobileView === 'preview'
+                ? 'text-white border-b-2 border-white bg-neutral-900'
+                : 'text-neutral-500 hover:text-neutral-300'
+            }`}
+          >
+            Preview
+            {generatedImages.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full"></span>
+            )}
+          </button>
+        </div>
+
         {showExitConfirm && (
           <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
             <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
@@ -276,7 +315,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         )}
 
         {/* Left: Controls */}
-        <div className="w-full md:w-1/3 p-6 flex flex-col border-r border-neutral-800 overflow-y-auto custom-scrollbar bg-[#0f0f0f]">
+        <div className={`w-full md:w-1/3 p-6 flex flex-col border-r border-neutral-800 overflow-y-auto custom-scrollbar bg-[#0f0f0f] ${mobileView === 'controls' ? 'md:flex flex' : 'hidden md:flex'}`}>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-white tracking-tight">Studio</h2>
             <button onClick={handleCloseRequest} className="p-2 hover:bg-neutral-800 rounded-full text-neutral-400 hover:text-white transition-colors">
@@ -478,7 +517,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         </div>
 
         {/* Right: Preview */}
-        <div className="w-full md:w-2/3 bg-neutral-950 flex flex-col items-center justify-center p-8 relative min-h-[400px]">
+        <div className={`w-full md:w-2/3 bg-neutral-950 flex flex-col items-center justify-center p-8 relative ${mobileView === 'preview' ? 'md:flex flex' : 'hidden md:flex'}`}>
           <div className="absolute inset-0 opacity-10 pointer-events-none" 
                style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '24px 24px' }}>
           </div>
@@ -490,11 +529,11 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3'
              }`}>
                {generatedImages.map((img, idx) => (
-                 <div key={idx} className={`relative group shadow-2xl rounded-lg overflow-hidden flex items-center justify-center ${generatedImages.length === 1 ? 'max-h-[75vh]' : 'aspect-square'}`}>
-                    <img 
-                      src={img} 
-                      alt={`Generated Result ${idx + 1}`} 
-                      className={`${generatedImages.length === 1 ? 'max-h-[75vh] w-auto' : 'w-full h-full object-cover'} max-w-full object-contain rounded-lg border border-neutral-800 shadow-2xl cursor-pointer`}
+                 <div key={idx} className={`relative group shadow-2xl rounded-lg overflow-hidden flex items-center justify-center ${generatedImages.length === 1 ? 'max-h-[60vh] md:max-h-[75vh]' : 'aspect-square'}`}>
+                    <img
+                      src={img}
+                      alt={`Generated Result ${idx + 1}`}
+                      className={`${generatedImages.length === 1 ? 'max-h-[60vh] md:max-h-[75vh] w-auto' : 'w-full h-full object-cover'} max-w-full object-contain rounded-lg border border-neutral-800 shadow-2xl cursor-pointer`}
                       onClick={() => {
                           setGeneratedImage(img);
                           setRemoteImageUrl(remoteImageUrls[idx]);
@@ -520,6 +559,17 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                     )}
                  </div>
                ))}
+
+               {/* Mobile: Back to Parameters Button */}
+               {generatedImages.length > 0 && (
+                 <button
+                   onClick={() => setMobileView('controls')}
+                   className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-30 px-6 py-3 bg-black/80 backdrop-blur-md text-white text-sm font-medium rounded-full border border-neutral-700 shadow-2xl flex items-center gap-2 hover:bg-black/90 transition-colors"
+                 >
+                   <Sparkles size={16} />
+                   Edit Parameters
+                 </button>
+               )}
              </div>
           ) : (
             <div className="text-center text-neutral-500 flex flex-col items-center gap-4">
