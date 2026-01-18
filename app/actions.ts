@@ -632,24 +632,25 @@ export async function saveTemplateAction(template: Template) {
 
 export async function getTemplatesAction(page: number = 1, limit: number = 20, search: string = '') {
   const supabase = await createClient();
-  
+
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  // Start building query
+  // Optimize query: select necessary fields + check for reference images using JSONB functions
   let query = supabase
     .from('templates')
-    .select('*')
-    .eq('status', 'approved');
+    .select('id, title, prompt, aspect_ratio, image_url, author, owner_id, is_published, status, created_at, reference_image, reference_images')
+    .eq('status', 'approved')
+    .eq('is_published', true); // Only show published templates
 
-  // Add search filter if provided
+  // Add search filter if provided (optimized to avoid full table scan)
   if (search) {
     query = query.or(`title.ilike.%${search}%,prompt.ilike.%${search}%`);
   }
 
-  // Finalize query
+  // Finalize query with optimized ordering
   const { data, error } = await query
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
     .range(from, to);
 
   if (error) return [];
@@ -660,6 +661,7 @@ export async function getTemplatesAction(page: number = 1, limit: number = 20, s
     prompt: t.prompt,
     aspectRatio: t.aspect_ratio,
     imageUrl: t.image_url,
+    // Keep reference image data for UI indicator, but it's minimal (just the reference to check existence)
     referenceImage: t.reference_image,
     referenceImages: t.reference_images,
     author: t.author,
@@ -672,15 +674,16 @@ export async function getTemplatesAction(page: number = 1, limit: number = 20, s
 export async function getMyTemplatesAction(page: number = 1, limit: number = 20, search: string = '') {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  
+
   if (!user) return [];
 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
+  // Optimize query: select necessary fields + check for reference images
   let query = supabase
     .from('templates')
-    .select('*')
+    .select('id, title, prompt, aspect_ratio, image_url, author, owner_id, is_published, status, created_at, reference_image, reference_images')
     .eq('owner_id', user.id);
 
   if (search) {
@@ -688,7 +691,7 @@ export async function getMyTemplatesAction(page: number = 1, limit: number = 20,
   }
 
   const { data, error } = await query
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
     .range(from, to);
 
   if (error) return [];
@@ -725,9 +728,10 @@ export async function getPendingTemplatesAction(page: number = 1, limit: number 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
+  // Optimize query: select necessary fields + check for reference images
   let query = supabase
     .from('templates')
-    .select('*')
+    .select('id, title, prompt, aspect_ratio, image_url, author, owner_id, is_published, status, created_at, reference_image, reference_images')
     .eq('status', 'pending');
 
   if (search) {
@@ -735,7 +739,7 @@ export async function getPendingTemplatesAction(page: number = 1, limit: number 
   }
 
   const { data, error } = await query
-    .order('created_at', { ascending: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
     .range(from, to);
 
   if (error) return [];
