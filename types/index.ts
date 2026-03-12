@@ -13,6 +13,7 @@ export interface Template {
   aspectRatio: AspectRatio;
   imageUrl?: string;
   referenceImage?: string; // Base64
+  referenceImages?: string[]; // Multiple reference images (Base64)
   author?: string;
   ownerId?: string; // 'system' or user.id
   isPublished?: boolean;
@@ -28,6 +29,7 @@ export interface GenerationConfig {
   imageSize: ImageSize;
   imageCount?: number;
   referenceImage?: string;
+  referenceImages?: string[]; // Multiple reference images (Base64)
 }
 
 export interface SessionPayload {

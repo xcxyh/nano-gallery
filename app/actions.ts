@@ -411,6 +411,7 @@ export async function generateImageAction(config: GenerationConfig): Promise<{
 
   const totalCost = costPerImage * imageCount;
 
+  // For non-admin users, check credits upfront for better UX
   if (profile.role !== 'admin' && profile.credits < totalCost) {
     return { success: false, error: `Insufficient credits. Need ${totalCost} credits, but you have ${profile.credits}.` };
   }
@@ -524,20 +525,35 @@ export async function generateImageAction(config: GenerationConfig): Promise<{
         throw new Error("Failed to generate any images.");
     }
 
-    // 5. Deduct Credits
+    // 5. Deduct Credits (Atomic operation to prevent race conditions)
     let newCredits = profile.credits;
     if (profile.role !== 'admin') {
-      newCredits = Math.max(0, profile.credits - totalCost);
-      const { error: updateError } = await supabaseAdmin
-        .from('profiles')
-        .update({ credits: newCredits })
-        .eq('id', user.id);
+      // Try atomic deduction via RPC first
+      const { data: deductResult, error: deductError } = await supabaseAdmin
+        .rpc('deduct_credits', { user_id: user.id, amount: totalCost });
 
-      if (updateError) {
-        console.error("Failed to update credits:", updateError);
+      if (deductError || !deductResult?.success) {
+        // RPC not available, use fallback with conditional update
+        console.warn("RPC deduct_credits not available, using fallback:", deductError);
+
+        const { data: updatedProfile, error: updateError } = await supabaseAdmin
+          .from('profiles')
+          .update({ credits: profile.credits - totalCost })
+          .eq('id', user.id)
+          .gte('credits', totalCost)  // Condition: credits must be >= deduction amount
+          .select('credits')
+          .single();
+
+        if (updateError || !updatedProfile) {
+          console.error("Failed to deduct credits:", updateError);
+          return { success: false, error: "积分扣除失败，请重试" };
+        }
+
+        newCredits = updatedProfile.credits;
       } else {
-        console.log("Credits updated successfully:", newCredits);
+        newCredits = deductResult.remainingCredits;
       }
+      console.log("Credits deducted successfully:", newCredits);
     }
 
     return {

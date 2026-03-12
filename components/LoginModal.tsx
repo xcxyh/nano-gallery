@@ -108,10 +108,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
             <div className="space-y-1.5 pt-2">
               <div className="flex items-center gap-2">
                 <KeyRound size={12} className="text-neutral-500" />
-                <label
-                  className="text-xs font-medium text-neutral-400 uppercase tracking-wider cursor-help"
-                  title="Dev Hint: Use 'BANANA_MASTER' to create an admin"
-                >
+                <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
                   Access Code (Optional)
                 </label>
               </div>
