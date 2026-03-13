@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslations } from 'next-intl';
 import { X, Sparkles, Save, Download, RefreshCw, AlertCircle, ImagePlus, Trash2, Globe, Lock, UserCircle, Coins } from 'lucide-react';
 import { Template, AspectRatio, ImageSize, User } from '@/types';
 import { generateImageAction } from '@/app/actions';
@@ -17,15 +18,21 @@ interface GeneratorModalProps {
 
 const ASPECT_RATIOS = ["1:1", "3:4", "4:3", "9:16", "16:9"] as const;
 
-const GeneratorModal: React.FC<GeneratorModalProps> = ({ 
-  isOpen, 
-  onClose, 
+const GeneratorModal: React.FC<GeneratorModalProps> = ({
+  isOpen,
+  onClose,
   initialTemplate,
   onSaveTemplate,
   user,
   setUser,
   onLoginRequest
 }) => {
+  // 翻译
+  const t = useTranslations('generator');
+  const tCommon = useTranslations('common');
+  const tSave = useTranslations('save');
+  const tExit = useTranslations('exitConfirm');
+
   const [prompt, setPrompt] = useState('');
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("1:1");
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
@@ -131,7 +138,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
     }
 
     if (user.credits < cost && user.role !== 'admin') {
-        setError(`Insufficient credits. You need ${cost} credits but have ${user.credits}.`);
+        setError(t('insufficientCredits'));
         return;
     }
 
@@ -272,7 +279,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 : 'text-neutral-500 hover:text-neutral-300'
             }`}
           >
-            Parameters
+            {t('parameters')}
           </button>
           <button
             onClick={() => setMobileView('preview')}
@@ -282,7 +289,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 : 'text-neutral-500 hover:text-neutral-300'
             }`}
           >
-            Preview
+            {t('preview')}
             {generatedImages.length > 0 && (
               <span className="absolute top-2 right-2 w-2 h-2 bg-green-500 rounded-full"></span>
             )}
@@ -292,22 +299,22 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         {showExitConfirm && (
           <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6">
             <div className="bg-neutral-900 border border-neutral-700 rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
-              <h3 className="text-xl font-bold text-white mb-2">Unsaved Changes</h3>
+              <h3 className="text-xl font-bold text-white mb-2">{tExit('title')}</h3>
               <p className="text-neutral-400 text-sm mb-6">
-                You have unsaved work. Are you sure you want to discard it and leave?
+                {tExit('description')}
               </p>
               <div className="flex gap-3">
-                <button 
+                <button
                   onClick={() => setShowExitConfirm(false)}
                   className="flex-1 px-4 py-2 rounded-lg bg-neutral-800 text-white hover:bg-neutral-700 transition-colors font-medium text-sm"
                 >
-                  Keep Editing
+                  {tExit('keepEditing')}
                 </button>
-                <button 
+                <button
                   onClick={onClose}
                   className="flex-1 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors font-medium text-sm"
                 >
-                  Discard & Exit
+                  {tExit('discardExit')}
                 </button>
               </div>
             </div>
@@ -317,7 +324,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
         {/* Left: Controls */}
         <div className={`w-full md:w-1/3 p-6 flex flex-col border-r border-neutral-800 overflow-y-auto custom-scrollbar bg-[#0f0f0f] ${mobileView === 'controls' ? 'md:flex flex' : 'hidden md:flex'}`}>
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold text-white tracking-tight">Studio</h2>
+            <h2 className="text-xl font-semibold text-white tracking-tight">{t('title')}</h2>
             <button onClick={handleCloseRequest} className="p-2 hover:bg-neutral-800 rounded-full text-neutral-400 hover:text-white transition-colors">
               <X size={20} />
             </button>
@@ -325,40 +332,40 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
 
           <div className="space-y-6 flex-1">
             <div>
-              <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Prompt</label>
+              <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">{t('prompt')}</label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                placeholder="Describe your imagination..."
+                placeholder={t('promptPlaceholder')}
                 className="w-full h-32 bg-neutral-900 border border-neutral-800 rounded-xl p-4 text-white placeholder-neutral-600 focus:outline-none focus:ring-1 focus:ring-white/20 resize-none text-sm leading-relaxed"
               />
             </div>
 
             <div>
                <div className="flex items-center justify-between mb-3">
-                 <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Reference Images</label>
-                 <button 
+                 <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">{t('referenceImages')}</label>
+                 <button
                    onClick={() => setShowRefInput(!showRefInput)}
                    className={`text-[10px] px-2 py-1 rounded border transition-colors ${
-                     showRefInput 
-                       ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30' 
+                     showRefInput
+                       ? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/30'
                        : 'bg-neutral-900 text-neutral-500 border-neutral-800 hover:text-neutral-300'
                    }`}
                  >
-                   {showRefInput ? 'Enabled' : 'Add References'}
+                   {showRefInput ? t('enabled') : t('addReferences')}
                  </button>
                </div>
-               
+
                {showRefInput && (
                  <div className="animate-in fade-in slide-in-from-top-2 duration-200 space-y-3">
-                   <div 
+                   <div
                      onClick={() => fileInputRef.current?.click()}
                      className="w-full h-20 border border-dashed border-neutral-700 hover:border-neutral-500 hover:bg-neutral-900/50 rounded-xl flex items-center justify-center gap-3 cursor-pointer transition-all group"
                    >
                      <div className="p-2 bg-neutral-800 rounded-lg group-hover:scale-110 transition-transform">
                        <ImagePlus size={16} className="text-neutral-400" />
                      </div>
-                     <span className="text-xs text-neutral-500 group-hover:text-neutral-300">Add Images</span>
+                     <span className="text-xs text-neutral-500 group-hover:text-neutral-300">{t('addImages')}</span>
                    </div>
                    
                    {referenceImages.length > 0 && (
@@ -395,7 +402,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Ratio</label>
+                <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">{t('ratio')}</label>
                 <div className="grid grid-cols-3 gap-2">
                   {ASPECT_RATIOS.map((ratio) => (
                     <button
@@ -414,19 +421,19 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
               </div>
                <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Quality</label>
-                  <select 
+                  <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">{t('quality')}</label>
+                  <select
                     value={imageSize}
                     onChange={(e) => setImageSize(e.target.value as ImageSize)}
                     className="w-full bg-neutral-900 border border-neutral-800 rounded-lg p-2 text-sm text-white focus:outline-none"
                   >
-                    <option value="1K">Standard (1K)</option>
-                    <option value="2K">High (2K)</option>
-                    <option value="4K">Ultra (4K)</option>
+                    <option value="1K">{t('standard')} (1K)</option>
+                    <option value="2K">{t('high')} (2K)</option>
+                    <option value="4K">{t('ultra')} (4K)</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">Count</label>
+                  <label className="block text-xs font-medium text-neutral-400 uppercase tracking-wider mb-2">{t('count')}</label>
                   <div className="flex gap-2">
                     {[1, 2, 3].map((num) => (
                       <button
@@ -457,7 +464,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 <div className={`p-4 rounded-xl flex items-center justify-between text-sm ${
                     (user.credits < cost && user.role !== 'admin') ? 'bg-red-900/10 border border-red-900/30' : 'bg-neutral-900/50 border border-neutral-800'
                 }`}>
-                    <span className="text-neutral-400">Available Credits</span>
+                    <span className="text-neutral-400">{t('availableCredits')}</span>
                     <div className="flex items-center gap-2">
                         <Coins size={14} className={user.credits >= cost || user.role === 'admin' ? "text-yellow-400 fill-yellow-400" : "text-red-400"} />
                         <span className={`font-bold ${user.credits >= cost || user.role === 'admin' ? "text-white" : "text-red-400"}`}>{user.role === 'admin' ? '∞' : user.credits}</span>
@@ -473,7 +480,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                     className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-yellow-400 text-black hover:bg-yellow-300 transition-all"
                 >
                     <UserCircle size={18} />
-                    Login to Generate
+                    {t('loginToGenerate')}
                 </button>
             ) : (
                 <button
@@ -488,17 +495,17 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                 {isGenerating ? (
                     <>
                     <RefreshCw className="animate-spin" size={18} />
-                    Generating...
+                    {t('generating')}
                     </>
                 ) : (user.credits < cost && user.role !== 'admin') ? (
                     <>
                     <Lock size={18} />
-                    Insufficient Credits
+                    {t('insufficientCredits')}
                     </>
                 ) : (
                     <>
                     <Sparkles size={18} />
-                    Generate ({cost} Credit{cost > 1 ? 's' : ''})
+                    {t('generate')} ({cost} {cost > 1 ? t('credits') : t('credit')})
                     </>
                 )}
                 </button>
@@ -510,7 +517,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                     className="w-full py-3.5 rounded-xl flex items-center justify-center gap-2 font-semibold text-sm bg-neutral-800 text-white hover:bg-neutral-700 border border-neutral-700 hover:border-neutral-600 transition-all"
                 >
                     <Save size={18} />
-                    {initialTemplate ? 'Publish Remix' : 'Save Template'}
+                    {initialTemplate ? t('publishRemix') : t('saveTemplate')}
                 </button>
             )}
           </div>
@@ -554,7 +561,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                     {/* Selection Indicator if multiple */}
                     {generatedImages.length > 1 && generatedImage === img && (
                         <div className="absolute top-4 left-4 bg-green-500 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg pointer-events-none">
-                            SELECTED
+                            {t('selected')}
                         </div>
                     )}
                  </div>
@@ -567,7 +574,7 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                    className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-30 px-6 py-3 bg-black/80 backdrop-blur-md text-white text-sm font-medium rounded-full border border-neutral-700 shadow-2xl flex items-center gap-2 hover:bg-black/90 transition-colors"
                  >
                    <Sparkles size={16} />
-                   Edit Parameters
+                   {t('editParameters')}
                  </button>
                )}
              </div>
@@ -576,19 +583,19 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
               <div className="w-24 h-24 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center">
                  <Sparkles size={32} className="text-neutral-700" />
               </div>
-              <p className="text-sm font-light">Preview will appear here</p>
+              <p className="text-sm font-light">{t('previewPlaceholder')}</p>
             </div>
           )}
 
           {isSaveMode && generatedImage && (
              <div className="absolute inset-0 z-20 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
                 <div className="bg-[#0f0f0f] border border-neutral-700 p-6 rounded-2xl shadow-2xl w-full max-w-md animate-in slide-in-from-bottom-5 fade-in">
-                    <h3 className="text-white text-lg font-medium mb-1">Save to Gallery</h3>
-                    <p className="text-neutral-400 text-sm mb-4">Give your creation a memorable title.</p>
-                    
+                    <h3 className="text-white text-lg font-medium mb-1">{tSave('title')}</h3>
+                    <p className="text-neutral-400 text-sm mb-4">{tSave('description')}</p>
+
                     <input
                         type="text"
-                        placeholder="E.g., Neon Cyber Samurai"
+                        placeholder={tSave('titlePlaceholder')}
                         value={newTitle}
                         onChange={(e) => setNewTitle(e.target.value)}
                         className="w-full bg-neutral-800 border border-neutral-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:border-white/30 mb-6"
@@ -601,28 +608,28 @@ const GeneratorModal: React.FC<GeneratorModalProps> = ({
                            {isPublished ? <Globe size={18} /> : <Lock size={18} />}
                         </div>
                         <div className="text-left">
-                          <p className="text-sm text-white font-medium">{isPublished ? 'Public Template' : 'Private Draft'}</p>
-                          <p className="text-xs text-neutral-500">{isPublished ? 'Visible to everyone on homepage' : 'Only visible in your library'}</p>
+                          <p className="text-sm text-white font-medium">{isPublished ? tSave('publicTemplate') : tSave('privateDraft')}</p>
+                          <p className="text-xs text-neutral-500">{isPublished ? tSave('publicDesc') : tSave('privateDesc')}</p>
                         </div>
                       </div>
                       <div className={`w-10 h-5 rounded-full relative transition-colors ${isPublished ? 'bg-green-500' : 'bg-neutral-700'}`}>
                         <div className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${isPublished ? 'left-6' : 'left-1'}`}></div>
                       </div>
                     </div>
-                    
+
                     <div className="flex gap-3">
-                        <button 
+                        <button
                             onClick={() => setIsSaveMode(false)}
                             className="flex-1 py-3 text-sm text-neutral-400 hover:text-white transition-colors hover:bg-neutral-800 rounded-xl"
                         >
-                            Cancel
+                            {tCommon('cancel')}
                         </button>
-                        <button 
+                        <button
                             onClick={handleSave}
                             disabled={!newTitle.trim()}
                             className="flex-1 py-3 bg-white text-black text-sm font-bold rounded-xl hover:bg-neutral-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            Save Template
+                            {tSave('saveTemplate')}
                         </button>
                     </div>
                 </div>

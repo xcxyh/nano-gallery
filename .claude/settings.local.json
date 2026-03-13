@@ -5,7 +5,11 @@
       "Bash(npm run build 2>&1)",
       "Bash(npm install 2>&1)",
       "Bash(npm run lint 2>&1)",
-      "Bash(pkill -f \"next lint\" 2>/dev/null; echo \"Lint setup skipped - not configured in project\")"
+      "Bash(pkill -f \"next lint\" 2>/dev/null; echo \"Lint setup skipped - not configured in project\")",
+      "Bash(npm install:*)"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
   }
 }

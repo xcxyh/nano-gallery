@@ -1,8 +1,16 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import createIntlMiddleware from 'next-intl/middleware'
+import { routing } from './i18n/routing'
+
+// 创建国际化中间件
+const intlMiddleware = createIntlMiddleware(routing)
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  // 1. 先处理国际化重定向
+  const intlResponse = intlMiddleware(request)
+
+  let response = intlResponse || NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -76,4 +84,3 @@ export const config = {
     '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }
-

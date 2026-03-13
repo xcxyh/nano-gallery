@@ -1,0 +1,146 @@
+{
+  "common": {
+    "loading": "Loading...",
+    "login": "Login",
+    "logout": "Logout",
+    "create": "Create",
+    "tryDemo": "Try Demo",
+    "cancel": "Cancel",
+    "save": "Save",
+    "download": "Download",
+    "search": "Search",
+    "clear": "Clear"
+  },
+  "header": {
+    "title": "Nano Banana",
+    "pro": "Pro",
+    "subtitle": "Gemini 3 Pro Gallery",
+    "credits": "Credits",
+    "superUser": "Super User",
+    "creator": "Creator"
+  },
+  "hero": {
+    "title": "Discover & Create with",
+    "titleHighlight": "Nano Banana Pro",
+    "description": "Explore a curated collection of Gemini 3 Pro prompts and templates. Generate stunning visuals, remix existing styles, and build your personal library."
+  },
+  "search": {
+    "placeholder": "Search templates by title or prompt..."
+  },
+  "tabs": {
+    "gallery": "Gallery",
+    "myLibrary": "My Library",
+    "review": "Review",
+    "publicStyles": "Public Styles",
+    "pendingStyles": "Pending",
+    "personalStyles": "Personal Styles"
+  },
+  "template": {
+    "refImage": "Ref Image",
+    "refs": "Refs",
+    "pending": "Pending",
+    "rejected": "Rejected",
+    "approve": "Approve",
+    "reject": "Reject",
+    "tryThis": "Try this",
+    "by": "By",
+    "anonymous": "Anonymous",
+    "copyPrompt": "Copy Prompt"
+  },
+  "empty": {
+    "noTemplates": "No templates found",
+    "libraryEmpty": "You haven't created any templates yet. Start creating to build your personal collection.",
+    "galleryEmpty": "The public gallery is empty.",
+    "createFirst": "Create First Template"
+  },
+  "loadMore": "Load More",
+  "footer": {
+    "copyright": "Copyright © 2025, Created by XCC"
+  },
+  "generator": {
+    "title": "Studio",
+    "parameters": "Parameters",
+    "preview": "Preview",
+    "prompt": "Prompt",
+    "promptPlaceholder": "Describe your imagination...",
+    "referenceImages": "Reference Images",
+    "addReferences": "Add References",
+    "enabled": "Enabled",
+    "addImages": "Add Images",
+    "ratio": "Ratio",
+    "quality": "Quality",
+    "count": "Count",
+    "standard": "Standard",
+    "high": "High",
+    "ultra": "Ultra",
+    "availableCredits": "Available Credits",
+    "loginToGenerate": "Login to Generate",
+    "generating": "Generating...",
+    "insufficientCredits": "Insufficient Credits",
+    "generate": "Generate",
+    "credit": "Credit",
+    "credits": "Credits",
+    "publishRemix": "Publish Remix",
+    "saveTemplate": "Save Template",
+    "previewPlaceholder": "Preview will appear here",
+    "selected": "SELECTED",
+    "editParameters": "Edit Parameters"
+  },
+  "save": {
+    "title": "Save to Gallery",
+    "description": "Give your creation a memorable title.",
+    "titlePlaceholder": "E.g., Neon Cyber Samurai",
+    "publicTemplate": "Public Template",
+    "privateDraft": "Private Draft",
+    "publicDesc": "Visible to everyone on homepage",
+    "privateDesc": "Only visible in your library",
+    "saveTemplate": "Save Template"
+  },
+  "exitConfirm": {
+    "title": "Unsaved Changes",
+    "description": "You have unsaved work. Are you sure you want to discard it and leave?",
+    "keepEditing": "Keep Editing",
+    "discardExit": "Discard & Exit"
+  },
+  "login": {
+    "joinStudio": "Join the Studio",
+    "welcomeBack": "Welcome Back",
+    "joinDesc": "Create your profile to start generating.",
+    "loginDesc": "Login to access your library.",
+    "email": "Email",
+    "emailPlaceholder": "e.g., user@example.com",
+    "emailHint": "Please enter a valid email address",
+    "password": "Password",
+    "accessCode": "Access Code (Optional)",
+    "accessCodePlaceholder": "For admin privileges",
+    "processing": "Processing...",
+    "createAccount": "Create Account",
+    "haveAccount": "Already have an account?",
+    "noAccount": "Don't have an account?",
+    "loginInstead": "Log in instead",
+    "createOne": "Create an account"
+  },
+  "errors": {
+    "authFailed": "Authentication failed",
+    "unexpectedError": "An unexpected error occurred.",
+    "invalidEmail": "Invalid email format.",
+    "wrongCredentials": "Invalid email or password. Please check and try again.",
+    "emailNotConfirmed": "Please confirm your email address first. Check your inbox (including spam folder).",
+    "userNotFound": "This email is not registered. Please sign up first.",
+    "loginFailed": "Login failed. Please try again later.",
+    "noUserInfo": "Login failed. Could not retrieve user information.",
+    "passwordTooShort": "Password must be at least 6 characters.",
+    "emailExists": "This email is already registered. Please use a different email or login directly.",
+    "registerFailed": "Registration failed. Please try again later.",
+    "noUserCreated": "Registration failed. User was not created.",
+    "registerSuccessNoProfile": "Registration successful, but could not retrieve profile. Please try logging in later.",
+    "insufficientCreditsError": "Insufficient credits. Need {needed} credits, but you have {have}.",
+    "apiKeyNotConfigured": "API Key not configured. Please set GEMINI_API_KEY in .env.local",
+    "apiKeyInvalid": "Invalid API Key. Please check GEMINI_API_KEY in .env.local",
+    "networkError": "Network connection failed. Please check your network or API availability.",
+    "apiForbidden": "API access denied. Please check API Key permissions or quota.",
+    "rateLimited": "API rate limit exceeded. Please try again later.",
+    "generationFailed": "Image generation failed",
+    "deductFailed": "Credit deduction failed. Please try again."
+  }
+}

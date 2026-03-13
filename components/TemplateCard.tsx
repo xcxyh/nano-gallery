@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { useTranslations } from 'next-intl';
 import { Template } from '@/types';
 import { Play, Copy, Image as ImageIcon, Lock, CheckCircle, XCircle, Clock } from 'lucide-react';
 
@@ -13,6 +14,8 @@ interface TemplateCardProps {
 }
 
 const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onApprove, onReject, showStatus }) => {
+  const t = useTranslations('template');
+
   const handleCopy = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard.writeText(template.prompt);
@@ -51,9 +54,9 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onAppro
                 <div className="bg-black/50 backdrop-blur-sm px-2 py-1 rounded-lg text-white/80 border border-white/10 flex items-center gap-1.5" title="Includes Reference Image(s)">
                     <ImageIcon size={12} />
                     <span className="text-[10px] font-medium">
-                         {template.referenceImages && template.referenceImages.length > 1 
-                            ? `${template.referenceImages.length} Refs` 
-                            : 'Ref Image'}
+                         {template.referenceImages && template.referenceImages.length > 1
+                            ? `${template.referenceImages.length} ${t('refs')}`
+                            : t('refImage')}
                     </span>
                 </div>
             )}
@@ -65,13 +68,13 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onAppro
             {showStatus && template.status === 'pending' && (
                <div className="bg-yellow-500/20 backdrop-blur-sm px-2 py-1 rounded-lg text-yellow-400 border border-yellow-500/30 flex items-center gap-1">
                   <Clock size={12} />
-                  <span className="text-[10px] font-bold uppercase">Pending</span>
+                  <span className="text-[10px] font-bold uppercase">{t('pending')}</span>
                </div>
             )}
             {showStatus && template.status === 'rejected' && (
                <div className="bg-red-500/20 backdrop-blur-sm px-2 py-1 rounded-lg text-red-400 border border-red-500/30 flex items-center gap-1">
                   <XCircle size={12} />
-                  <span className="text-[10px] font-bold uppercase">Rejected</span>
+                  <span className="text-[10px] font-bold uppercase">{t('rejected')}</span>
                </div>
             )}
         </div>
@@ -79,23 +82,23 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onAppro
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-4 backdrop-blur-[2px]">
             {onApprove && onReject ? (
                <div className="flex gap-2">
-                 <button 
+                 <button
                     onClick={handleApprove}
                     className="flex items-center gap-2 bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-full font-medium transition-colors"
                  >
-                    <CheckCircle size={16} /> Approve
+                    <CheckCircle size={16} /> {t('approve')}
                  </button>
-                 <button 
+                 <button
                     onClick={handleReject}
                     className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-full font-medium transition-colors"
                  >
-                    <XCircle size={16} /> Reject
+                    <XCircle size={16} /> {t('reject')}
                  </button>
                </div>
             ) : (
                 <button className="flex items-center gap-2 bg-white text-black px-4 py-2 rounded-full font-medium transform scale-95 group-hover:scale-100 transition-transform">
                     <Play size={16} fill="currentColor" />
-                    Try this
+                    {t('tryThis')}
                 </button>
             )}
         </div>
@@ -112,11 +115,11 @@ const TemplateCard: React.FC<TemplateCardProps> = ({ template, onSelect, onAppro
             {template.prompt}
         </p>
         <div className="flex items-center justify-between mt-2 border-t border-neutral-800 pt-3">
-            <span className="text-xs text-neutral-600">By {template.author || 'Anonymous'}</span>
-            <button 
+            <span className="text-xs text-neutral-600">{t('by')} {template.author || t('anonymous')}</span>
+            <button
                 onClick={handleCopy}
                 className="text-neutral-500 hover:text-white transition-colors p-1.5 hover:bg-neutral-800 rounded-md"
-                title="Copy Prompt"
+                title={t('copyPrompt')}
             >
                 <Copy size={14} />
             </button>

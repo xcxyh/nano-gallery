@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { X, ChevronRight, KeyRound, AlertCircle, UserPlus, LogIn, Lock } from 'lucide-react';
 import { loginAction, registerAction } from '@/app/actions';
 import { User } from '@/types';
@@ -12,6 +13,9 @@ interface LoginModalProps {
 }
 
 const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
+  const t = useTranslations('login');
+  const tCommon = useTranslations('common');
+
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
@@ -61,8 +65,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
       <div className="relative w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-8 shadow-2xl animate-in zoom-in-95 duration-200">
         <div className="flex justify-between items-center mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-white">{isRegistering ? 'Join the Studio' : 'Welcome Back'}</h2>
-            <p className="text-sm text-neutral-500 mt-1">{isRegistering ? 'Create your profile to start generating.' : 'Login to access your library.'}</p>
+            <h2 className="text-2xl font-bold text-white">{isRegistering ? t('joinStudio') : t('welcomeBack')}</h2>
+            <p className="text-sm text-neutral-500 mt-1">{isRegistering ? t('joinDesc') : t('loginDesc')}</p>
           </div>
           <button onClick={onClose} className="text-neutral-500 hover:text-white transition-colors p-2 hover:bg-neutral-800 rounded-full">
             <X size={20} />
@@ -72,25 +76,25 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-              Email
+              {t('email')}
             </label>
             <input
               type="email"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., user@example.com"
+              placeholder={t('emailPlaceholder')}
               className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3.5 text-white focus:outline-none focus:border-yellow-400/50 transition-colors"
               autoFocus
               required
             />
             <p className="text-xs text-neutral-600">
-              请输入有效的邮箱地址
+              {t('emailHint')}
             </p>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-              Password
+              {t('password')}
             </label>
             <div className="relative">
               <input
@@ -109,14 +113,14 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
               <div className="flex items-center gap-2">
                 <KeyRound size={12} className="text-neutral-500" />
                 <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">
-                  Access Code (Optional)
+                  {t('accessCode')}
                 </label>
               </div>
               <input
                 type="text"
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value)}
-                placeholder="For admin privileges"
+                placeholder={t('accessCodePlaceholder')}
                 className="w-full bg-neutral-950 border border-neutral-800 rounded-xl p-3.5 text-white focus:outline-none focus:border-yellow-400/50 transition-colors placeholder:text-neutral-700"
               />
             </div>
@@ -134,15 +138,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
             disabled={!name.trim() || !password.trim() || loading}
             className="w-full py-3.5 bg-yellow-400 hover:bg-yellow-300 text-black font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
           >
-            {loading ? 'Processing...' : (
-              isRegistering ? <><UserPlus size={18} /> Create Account</> : <><LogIn size={18} /> Login</>
+            {loading ? t('processing') : (
+              isRegistering ? <><UserPlus size={18} /> {t('createAccount')}</> : <><LogIn size={18} /> {tCommon('login')}</>
             )}
           </button>
         </form>
 
         <div className="mt-6 pt-6 border-t border-neutral-800 text-center">
           <p className="text-neutral-400 text-sm">
-            {isRegistering ? "Already have an account?" : "Don't have an account?"}
+            {isRegistering ? t('haveAccount') : t('noAccount')}
           </p>
           <button
             onClick={() => {
@@ -152,7 +156,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
             }}
             className="text-yellow-400 hover:text-yellow-300 font-medium text-sm mt-1 transition-colors"
           >
-            {isRegistering ? "Log in instead" : "Create an account"}
+            {isRegistering ? t('loginInstead') : t('createOne')}
           </button>
         </div>
       </div>

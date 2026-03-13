@@ -1,19 +1,21 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useTranslations } from 'next-intl';
 import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock, Search, ShieldCheck } from 'lucide-react';
 import { Template, User } from '@/types';
 import TemplateCard from '@/components/TemplateCard';
 import GeneratorModal from '@/components/GeneratorModal';
 import LoginModal from '@/components/LoginModal';
-import { 
-  getSessionAction, 
-  logoutAction, 
-  getTemplatesAction, 
-  saveTemplateAction, 
-  getMyTemplatesAction, 
-  getPendingTemplatesAction, 
-  updateTemplateStatusAction 
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import {
+  getSessionAction,
+  logoutAction,
+  getTemplatesAction,
+  saveTemplateAction,
+  getMyTemplatesAction,
+  getPendingTemplatesAction,
+  updateTemplateStatusAction
 } from '@/app/actions';
 
 type TabData = {
@@ -33,6 +35,16 @@ const initialTabData: TabData = {
 };
 
 export default function Home() {
+  // 翻译
+  const t = useTranslations();
+  const tHeader = useTranslations('header');
+  const tHero = useTranslations('hero');
+  const tSearch = useTranslations('search');
+  const tTabs = useTranslations('tabs');
+  const tEmpty = useTranslations('empty');
+  const tFooter = useTranslations('footer');
+  const tTemplate = useTranslations('template');
+
   // Tabs Cache State
   const [tabsData, setTabsData] = useState<Record<string, TabData>>({
     gallery: { ...initialTabData },
@@ -271,8 +283,8 @@ export default function Home() {
                 <Zap className="text-black fill-current" size={20} />
              </div>
              <div>
-                <h1 className="text-xl font-bold tracking-tight">Nano Banana <span className="text-yellow-400">Pro</span></h1>
-                <p className="text-[10px] text-neutral-500 font-mono tracking-widest uppercase">Gemini 3 Pro Gallery</p>
+                <h1 className="text-xl font-bold tracking-tight">{tHeader('title')} <span className="text-yellow-400">{tHeader('pro')}</span></h1>
+                <p className="text-[10px] text-neutral-500 font-mono tracking-widest uppercase">{tHeader('subtitle')}</p>
              </div>
           </div>
           
@@ -290,7 +302,7 @@ export default function Home() {
 
                 <div className="hidden sm:flex flex-col items-end">
                    <span className="text-sm font-medium">{user.name}</span>
-                   <span className="text-[10px] text-neutral-500 uppercase tracking-wider">{user.role === 'admin' ? 'Super User' : 'Creator'}</span>
+                   <span className="text-[10px] text-neutral-500 uppercase tracking-wider">{user.role === 'admin' ? tHeader('superUser') : tHeader('creator')}</span>
                 </div>
                 <div className="relative group">
                    <button className="w-9 h-9 rounded-full bg-neutral-800 overflow-hidden border border-neutral-700">
@@ -298,26 +310,28 @@ export default function Home() {
                    </button>
                    <div className="absolute right-0 top-full mt-2 w-48 bg-neutral-900 border border-neutral-800 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all transform origin-top-right">
                       <button onClick={handleLogout} className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-neutral-800 first:rounded-t-xl last:rounded-b-xl flex items-center gap-2">
-                        <LogOut size={14} /> Logout
+                        <LogOut size={14} /> {t('common.logout')}
                       </button>
                    </div>
                 </div>
               </div>
             ) : (
-              <button 
+              <button
                 onClick={() => setIsLoginOpen(true)}
                 className="text-sm font-medium text-neutral-400 hover:text-white transition-colors"
               >
-                Login
+                {t('common.login')}
               </button>
             )}
 
-            <button 
+            <LanguageSwitcher />
+
+            <button
               onClick={handleOpenCreator}
               className="hidden sm:flex items-center gap-2 bg-white text-black px-5 py-2.5 rounded-full font-medium text-sm hover:bg-neutral-200 transition-all shadow-[0_0_20px_rgba(255,255,255,0.05)] hover:shadow-[0_0_25px_rgba(255,255,255,0.15)] transform active:scale-95"
             >
               <Plus size={18} />
-              {user ? 'Create' : 'Try Demo'}
+              {user ? t('common.create') : t('common.tryDemo')}
             </button>
           </div>
         </div>
@@ -329,11 +343,10 @@ export default function Home() {
         {/* Intro Section */}
         <div className="mb-12 text-center max-w-3xl mx-auto">
            <h2 className="text-3xl md:text-4xl font-bold mb-4 text-white">
-             Discover & Create with <span className="text-yellow-400">Nano Banana Pro</span>
+             {tHero('title')} <span className="text-yellow-400">{tHero('titleHighlight')}</span>
            </h2>
            <p className="text-neutral-400 text-lg">
-             Explore a curated collection of Gemini 3 Pro prompts and templates. 
-             Generate stunning visuals, remix existing styles, and build your personal library.
+             {tHero('description')}
            </p>
         </div>
 
@@ -343,9 +356,9 @@ export default function Home() {
               <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
                  <Search className="text-neutral-500 group-focus-within:text-yellow-400 transition-colors" size={20} />
               </div>
-              <input 
-                type="text" 
-                placeholder="Search templates by title or prompt..." 
+              <input
+                type="text"
+                placeholder={tSearch('placeholder')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-neutral-900/50 border border-neutral-800 text-white pl-12 pr-4 py-4 rounded-2xl focus:outline-none focus:border-yellow-400/50 focus:ring-1 focus:ring-yellow-400/50 transition-all placeholder:text-neutral-600"
@@ -365,33 +378,33 @@ export default function Home() {
         {/* Tabs / Navigation */}
         <div className="flex flex-col md:flex-row items-center justify-between mb-8 gap-6">
             <div className="flex bg-neutral-900/50 p-1 rounded-full border border-neutral-800 backdrop-blur-sm">
-                <button 
+                <button
                     onClick={() => setActiveTab('gallery')}
                     className={`px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'gallery' ? 'bg-white text-black shadow-lg' : 'text-neutral-500 hover:text-white'}`}
                 >
-                    Gallery
+                    {tTabs('gallery')}
                 </button>
-                <button 
+                <button
                     onClick={() => user ? setActiveTab('library') : setIsLoginOpen(true)}
                     className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'library' ? 'bg-white text-black shadow-lg' : 'text-neutral-500 hover:text-white'}`}
                 >
                     {activeTab !== 'library' && <Lock size={12} className="opacity-50" />}
-                    My Library
+                    {tTabs('myLibrary')}
                 </button>
                 {user?.role === 'admin' && (
-                    <button 
+                    <button
                         onClick={() => setActiveTab('review')}
                         className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium transition-all ${activeTab === 'review' ? 'bg-white text-black shadow-lg' : 'text-neutral-500 hover:text-white'}`}
                     >
                         {activeTab !== 'review' && <ShieldCheck size={12} className="opacity-50" />}
-                        Review ({pendingCount})
+                        {tTabs('review')} ({pendingCount})
                     </button>
                 )}
             </div>
 
             <div className="flex items-center gap-2 text-sm text-neutral-400">
                 <ImageIcon size={16} />
-                <span>{showMainLoading ? 'Loading...' : `${templates.length} ${activeTab === 'gallery' ? 'Public' : activeTab === 'review' ? 'Pending' : 'Personal'} Styles`}</span>
+                <span>{showMainLoading ? t('common.loading') : `${templates.length} ${activeTab === 'gallery' ? tTabs('publicStyles') : activeTab === 'review' ? tTabs('pendingStyles') : tTabs('personalStyles')}`}</span>
             </div>
         </div>
 
@@ -424,10 +437,10 @@ export default function Home() {
                     {isFetching ? (
                         <>
                             <div className="animate-spin w-4 h-4 border-2 border-white/50 border-t-white rounded-full"></div>
-                            Loading...
+                            {t('common.loading')}
                         </>
                     ) : (
-                        'Load More'
+                        t('loadMore')
                     )}
                 </button>
             </div>
@@ -437,7 +450,7 @@ export default function Home() {
         {showMainLoading && (
            <div className="text-center py-20">
               <div className="animate-spin w-8 h-8 border-2 border-yellow-400 border-t-transparent rounded-full mx-auto mb-4"></div>
-              <p className="text-neutral-500">Loading gallery...</p>
+              <p className="text-neutral-500">{t('common.loading')}</p>
            </div>
         )}
 
@@ -447,17 +460,17 @@ export default function Home() {
                 <div className="w-16 h-16 bg-neutral-900 rounded-2xl flex items-center justify-center mx-auto mb-4 text-neutral-700">
                     <LayoutGrid size={32} />
                 </div>
-                <h3 className="text-lg font-medium text-neutral-300 mb-2">No templates found</h3>
+                <h3 className="text-lg font-medium text-neutral-300 mb-2">{tEmpty('noTemplates')}</h3>
                 <p className="text-neutral-500 max-w-sm mx-auto mb-6">
-                    {activeTab === 'library' 
-                        ? "You haven't created any templates yet. Start creating to build your personal collection." 
-                        : "The public gallery is empty."}
+                    {activeTab === 'library'
+                        ? tEmpty('libraryEmpty')
+                        : tEmpty('galleryEmpty')}
                 </p>
-                <button 
+                <button
                   onClick={handleOpenCreator}
                   className="px-6 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-lg text-sm font-medium transition-colors"
                 >
-                   Create First Template
+                   {tEmpty('createFirst')}
                 </button>
             </div>
         )}
@@ -465,7 +478,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="w-full py-6 text-center border-t border-white/5 bg-[#050505] text-neutral-500 text-sm">
-        <p>Copyright © 2025, Created by XCC</p>
+        <p>{tFooter('copyright')}</p>
       </footer>
 
       <button 

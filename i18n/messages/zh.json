@@ -1,0 +1,146 @@
+{
+  "common": {
+    "loading": "加载中...",
+    "login": "登录",
+    "logout": "退出登录",
+    "create": "创建",
+    "tryDemo": "试用演示",
+    "cancel": "取消",
+    "save": "保存",
+    "download": "下载",
+    "search": "搜索",
+    "clear": "清除"
+  },
+  "header": {
+    "title": "Nano Banana",
+    "pro": "Pro",
+    "subtitle": "Gemini 3 Pro 画廊",
+    "credits": "积分",
+    "superUser": "超级用户",
+    "creator": "创作者"
+  },
+  "hero": {
+    "title": "探索与创造，尽在",
+    "titleHighlight": "Nano Banana Pro",
+    "description": "探索精选的 Gemini 3 Pro 提示词和模板库。生成惊艳的视觉作品，重新混合现有风格，构建您的个人收藏。"
+  },
+  "search": {
+    "placeholder": "搜索模板标题或提示词..."
+  },
+  "tabs": {
+    "gallery": "画廊",
+    "myLibrary": "我的收藏",
+    "review": "审核",
+    "publicStyles": "公共模板",
+    "pendingStyles": "待审核",
+    "personalStyles": "个人模板"
+  },
+  "template": {
+    "refImage": "参考图",
+    "refs": "张参考图",
+    "pending": "待审核",
+    "rejected": "已拒绝",
+    "approve": "批准",
+    "reject": "拒绝",
+    "tryThis": "试用此模板",
+    "by": "作者",
+    "anonymous": "匿名",
+    "copyPrompt": "复制提示词"
+  },
+  "empty": {
+    "noTemplates": "未找到模板",
+    "libraryEmpty": "您还没有创建任何模板。开始创作，建立您的个人收藏。",
+    "galleryEmpty": "公共画廊暂无内容。",
+    "createFirst": "创建第一个模板"
+  },
+  "loadMore": "加载更多",
+  "footer": {
+    "copyright": "版权所有 © 2025，由 XCC 创建"
+  },
+  "generator": {
+    "title": "工作室",
+    "parameters": "参数",
+    "preview": "预览",
+    "prompt": "提示词",
+    "promptPlaceholder": "描述您的想象...",
+    "referenceImages": "参考图片",
+    "addReferences": "添加参考",
+    "enabled": "已启用",
+    "addImages": "添加图片",
+    "ratio": "比例",
+    "quality": "质量",
+    "count": "数量",
+    "standard": "标准",
+    "high": "高清",
+    "ultra": "超清",
+    "availableCredits": "可用积分",
+    "loginToGenerate": "登录以生成",
+    "generating": "生成中...",
+    "insufficientCredits": "积分不足",
+    "generate": "生成",
+    "credit": "积分",
+    "credits": "积分",
+    "publishRemix": "发布混音",
+    "saveTemplate": "保存模板",
+    "previewPlaceholder": "预览将在此显示",
+    "selected": "已选择",
+    "editParameters": "编辑参数"
+  },
+  "save": {
+    "title": "保存到画廊",
+    "description": "为您的作品起一个难忘的名字。",
+    "titlePlaceholder": "例如：霓虹赛博武士",
+    "publicTemplate": "公开模板",
+    "privateDraft": "私密草稿",
+    "publicDesc": "对所有人可见",
+    "privateDesc": "仅在您的收藏中可见",
+    "saveTemplate": "保存模板"
+  },
+  "exitConfirm": {
+    "title": "未保存的更改",
+    "description": "您有未保存的作品。确定要放弃并离开吗？",
+    "keepEditing": "继续编辑",
+    "discardExit": "放弃并退出"
+  },
+  "login": {
+    "joinStudio": "加入工作室",
+    "welcomeBack": "欢迎回来",
+    "joinDesc": "创建您的个人资料，开始生成作品。",
+    "loginDesc": "登录以访问您的收藏。",
+    "email": "邮箱",
+    "emailPlaceholder": "例如：user@example.com",
+    "emailHint": "请输入有效的邮箱地址",
+    "password": "密码",
+    "accessCode": "邀请码（可选）",
+    "accessCodePlaceholder": "用于管理员权限",
+    "processing": "处理中...",
+    "createAccount": "创建账户",
+    "haveAccount": "已有账户？",
+    "noAccount": "没有账户？",
+    "loginInstead": "改为登录",
+    "createOne": "创建账户"
+  },
+  "errors": {
+    "authFailed": "认证失败",
+    "unexpectedError": "发生意外错误。",
+    "invalidEmail": "邮箱格式无效。",
+    "wrongCredentials": "邮箱或密码错误，请检查后重试",
+    "emailNotConfirmed": "请先确认您的邮箱地址。请检查您的邮箱收件箱（包括垃圾邮件文件夹）",
+    "userNotFound": "该邮箱未注册，请先注册",
+    "loginFailed": "登录失败，请稍后重试",
+    "noUserInfo": "登录失败，未获取到用户信息",
+    "passwordTooShort": "密码至少需要 6 个字符",
+    "emailExists": "该邮箱已被注册，请使用其他邮箱或直接登录",
+    "registerFailed": "注册失败，请稍后重试",
+    "noUserCreated": "注册失败，未创建用户",
+    "registerSuccessNoProfile": "注册成功，但无法获取用户资料。请稍后重试登录",
+    "insufficientCreditsError": "积分不足。需要 {needed} 积分，但您只有 {have} 积分。",
+    "apiKeyNotConfigured": "API Key 未配置。请在 .env.local 中设置 GEMINI_API_KEY",
+    "apiKeyInvalid": "API Key 无效。请检查 .env.local 中的 GEMINI_API_KEY 配置",
+    "networkError": "网络连接失败。请检查网络连接或 API 服务是否可用",
+    "apiForbidden": "API 访问被拒绝。请检查 API Key 权限或配额",
+    "rateLimited": "API 请求频率过高，请稍后重试",
+    "generationFailed": "图片生成失败",
+    "deductFailed": "积分扣除失败，请重试"
+  }
+}
