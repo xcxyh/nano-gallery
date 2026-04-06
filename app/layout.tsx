@@ -1,9 +1,9 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import type { Metadata } from 'next';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: "Nano Banana Gallery",
-  description: "A premium generative art gallery.",
+  title: 'Nano Banana Gallery',
+  description: 'A premium generative art gallery.',
 };
 
 export default function RootLayout({
@@ -11,5 +11,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return children;
+  return (
+    <html lang="zh" suppressHydrationWarning>
+      <body>
+        {children}
+      </body>
+    </html>
+  );
 }

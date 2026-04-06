@@ -72,7 +72,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, onLoginSuccess
 
     try {
       const supabase = createClient();
-      const redirectUrl = new URL('/auth/callback', window.location.origin);
+      const redirectUrl = new URL(`/${locale}/auth/callback`, window.location.origin);
       redirectUrl.searchParams.set('next', pathname || `/${locale}`);
 
       const { error } = await supabase.auth.signInWithOAuth({
