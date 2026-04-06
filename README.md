@@ -74,6 +74,12 @@ Explore, create, and share high-quality image generation templates.
    SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
    ```
 
+   For Google sign-in, also enable the Google provider in Supabase Dashboard and set the callback URL to:
+   ```txt
+   https://lqdgjjjyxrfhlfxktxde.supabase.co/auth/callback
+   ```
+   In production, replace the domain with your deployed site URL.
+
 4. **Run the development server**
    ```bash
    npm run dev

@@ -6,8 +6,9 @@ import { supabaseAdmin } from "@/utils/supabase/admin";
 import { GenerationConfig, User, Template } from "@/types";
 import { revalidatePath } from "next/cache";
 import { validateEmail, normalizeEmail, extractUsernameFromEmail } from "@/utils/username";
+import { DEFAULT_USER_CREDITS, ensureUserProfile, findAuthUserByEmail, getProvidersForUser, toAppUser } from "@/utils/auth";
 
-const ADMIN_CODE = process.env.ADMIN_ACCESS_CODE || "BANANA_MASTER";
+const ADMIN_CODE = process.env.ADMIN_ACCESS_CODE?.trim() || null;
 const MODEL_NAME = "gemini-3-pro-image-preview";
 
 // --- Auth Actions ---
@@ -35,6 +36,17 @@ export async function loginAction(email: string, password: string) {
 
       // 提供更详细的错误信息
       if (error.message.includes('Invalid login credentials') || error.message.includes('invalid_credentials')) {
+        try {
+          const existingUser = await findAuthUserByEmail(normalizedEmail);
+          const providers = existingUser ? getProvidersForUser(existingUser) : new Set<string>();
+
+          if (providers.has('google') && !providers.has('email')) {
+            return { success: false, error: "该邮箱已绑定 Google 登录，请使用 Google 继续登录。" };
+          }
+        } catch (lookupError) {
+          console.error("Failed to inspect auth providers during login:", lookupError);
+        }
+
         return { success: false, error: "邮箱或密码错误，请检查后重试" };
       }
       if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
@@ -51,74 +63,14 @@ export async function loginAction(email: string, password: string) {
       return { success: false, error: "登录失败，未获取到用户信息" };
     }
 
-    // 2. Fetch Profile (如果不存在则创建)
-    let { data: profile, error: profileFetchError } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', data.user.id)
-      .single();
-
-    // 如果 profile 不存在，自动创建一个默认的 profile
-    if (!profile || profileFetchError) {
-      console.log("Profile not found, creating default profile for user:", data.user.id);
-      const displayName = extractUsernameFromEmail(normalizedEmail);
-
-      const { data: newProfile, error: createError } = await supabaseAdmin
-        .from('profiles')
-        .insert({
-          id: data.user.id,
-          name: displayName,
-          role: 'user',
-          credits: 3 // 默认积分
-        })
-        .select()
-        .single();
-
-      if (createError) {
-        console.error("Failed to create profile:", createError);
-        // 如果插入失败，尝试 upsert
-        const { data: upsertedProfile, error: upsertError } = await supabaseAdmin
-          .from('profiles')
-          .upsert({
-            id: data.user.id,
-            name: displayName,
-            role: 'user',
-            credits: 3
-          })
-          .select()
-          .single();
-
-        if (upsertError) {
-          console.error("Failed to upsert profile:", upsertError);
-          // 即使创建失败，也返回默认值
-          profile = {
-            id: data.user.id,
-            name: displayName,
-            role: 'user',
-            credits: 3
-          } as any;
-        } else {
-          profile = upsertedProfile;
-        }
-      } else {
-        profile = newProfile;
-      }
-    }
-
-    const role = profile?.role || 'user';
-    const credits = profile?.credits ?? 3; // 默认积分改为 3，而不是 0
-    const displayName = profile?.name || extractUsernameFromEmail(normalizedEmail);
+    const profile = await ensureUserProfile(data.user, {
+      fallbackName: extractUsernameFromEmail(normalizedEmail)
+    });
 
     revalidatePath('/');
     return {
       success: true,
-      user: {
-        id: data.user.id,
-        name: displayName,
-        role: role as 'admin' | 'user',
-        credits,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
-      } as User
+      user: toAppUser(data.user, profile) as User
     };
   } catch (err: any) {
     console.error("Login Error:", err);
@@ -144,6 +96,35 @@ export async function registerAction(email: string, password: string, accessCode
     const normalizedEmail = normalizeEmail(email);
     // 从邮箱中提取用户名作为显示名称
     const displayName = extractUsernameFromEmail(normalizedEmail);
+
+    let existingAuthUser = null;
+    try {
+      existingAuthUser = await findAuthUserByEmail(normalizedEmail);
+    } catch (lookupError) {
+      console.error("Failed to inspect existing auth users during signup:", lookupError);
+      return { success: false, error: "注册服务暂时不可用，请稍后重试" };
+    }
+
+    if (existingAuthUser) {
+      const providers = getProvidersForUser(existingAuthUser);
+
+      if (providers.has('google') && !providers.has('email')) {
+        return { success: false, error: "该邮箱已使用 Google 注册，请使用 Google 继续登录。如需密码登录，请先在已登录状态下绑定密码。" };
+      }
+
+      return { success: false, error: "该邮箱已被注册，请使用其他邮箱或直接登录" };
+    }
+
+    const trimmedAccessCode = accessCode?.trim() || '';
+    if (trimmedAccessCode) {
+      if (!ADMIN_CODE) {
+        return { success: false, error: "管理员邀请码未配置，当前无法创建管理员账户" };
+      }
+
+      if (trimmedAccessCode !== ADMIN_CODE) {
+        return { success: false, error: "邀请码无效，请检查后重试" };
+      }
+    }
 
     // 1. Sign Up
     const { data, error } = await supabase.auth.signUp({
@@ -197,87 +178,39 @@ export async function registerAction(email: string, password: string, accessCode
     }
 
     // 3. Determine Role and Credits based on Access Code
-    const isSuperUser = accessCode === ADMIN_CODE;
+    const isSuperUser = trimmedAccessCode !== '' && trimmedAccessCode === ADMIN_CODE;
     const role = isSuperUser ? 'admin' : 'user';
-    const credits = isSuperUser ? 9999 : 3;
+    const credits = isSuperUser ? 9999 : DEFAULT_USER_CREDITS;
 
-    // 4. Create Profile (Admin Client to bypass RLS)
-    const { data: createdProfile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .insert({
-        id: data.user.id,
-        name: displayName,
-        role: role,
-        credits: credits
-      })
-      .select()
-      .single();
-
-    if (profileError) {
+    let profile;
+    try {
+      profile = await ensureUserProfile(data.user, {
+        fallbackName: displayName,
+        role,
+        credits
+      });
+    } catch (profileError: any) {
       console.error("Profile creation error:", profileError);
-      console.error("Error details:", JSON.stringify(profileError, null, 2));
+      const details = profileError?.message || JSON.stringify(profileError, null, 2);
 
-      // 检查是否是 RLS 策略问题
-      if (profileError.message?.includes('permission denied') || profileError.message?.includes('RLS') || profileError.code === '42501') {
-        console.error("RLS policy issue detected. Please run the fix_profiles_rls.sql script in Supabase Dashboard.");
+      let errorMessage = "注册成功，但创建用户资料失败。";
+      if (details?.includes('permission denied') || profileError?.code === '42501') {
+        errorMessage += " 这可能是 RLS 策略问题，请检查 Supabase 配置。";
+      } else if (details) {
+        errorMessage += ` 错误详情: ${details}`;
       }
+      errorMessage += " 请稍后重试登录（登录时会自动创建 profile）。";
 
-      // Fallback: If profile exists (rare race condition), try upsert
-      const { data: upsertedProfile, error: upsertError } = await supabaseAdmin
-        .from('profiles')
-        .upsert({
-          id: data.user.id,
-          name: displayName,
-          role: role,
-          credits: credits
-        })
-        .select()
-        .single();
-
-      if (upsertError) {
-        console.error("Profile upsert error:", upsertError);
-        console.error("Upsert error details:", JSON.stringify(upsertError, null, 2));
-
-        // 提供更详细的错误信息
-        let errorMessage = "注册成功，但创建用户资料失败。";
-        if (upsertError.message?.includes('permission denied') || upsertError.code === '42501') {
-          errorMessage += " 这可能是 RLS 策略问题，请检查 Supabase 配置。";
-        } else if (upsertError.message) {
-          errorMessage += ` 错误详情: ${upsertError.message}`;
-        }
-        errorMessage += " 请稍后重试登录（登录时会自动创建 profile）。";
-
-        return {
-          success: false,
-          error: errorMessage
-        };
-      }
-
-      // 使用 upsert 后的 profile
-      if (!upsertedProfile) {
-        return {
-          success: false,
-          error: "注册成功，但无法获取用户资料。请稍后重试登录"
-        };
-      }
-    } else if (!createdProfile) {
-      console.error("Profile created but no data returned");
       return {
         success: false,
-        error: "注册成功，但无法获取用户资料。请稍后重试登录"
+        error: errorMessage
       };
     }
 
     revalidatePath('/');
     return {
       success: true,
-      user: {
-        id: data.user.id,
-        name: displayName,
-        role: role as 'admin' | 'user',
-        credits,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${displayName}`
-      } as User
+      user: toAppUser(data.user, profile) as User
     };
   } catch (err: any) {
     console.error("Register Exception:", err);
@@ -299,77 +232,8 @@ export async function getSessionAction() {
 
     if (!user) return null;
 
-    // Fetch profile details (使用 admin client 以确保可以读取)
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
-
-    // 如果 profile 不存在，自动创建一个默认的 profile
-    if (!profile || profileError) {
-      console.log("Profile not found in getSessionAction, creating default profile for user:", user.id);
-      const displayName = user.user_metadata?.name || user.email?.split('@')[0] || 'User';
-
-      const { data: newProfile, error: createError } = await supabaseAdmin
-        .from('profiles')
-        .insert({
-          id: user.id,
-          name: displayName,
-          role: 'user',
-          credits: 3 // 默认积分
-        })
-        .select()
-        .single();
-
-      if (createError) {
-        console.error("Failed to create profile in getSessionAction:", createError);
-        // 如果插入失败，尝试 upsert
-        const { data: upsertedProfile } = await supabaseAdmin
-          .from('profiles')
-          .upsert({
-            id: user.id,
-            name: displayName,
-            role: 'user',
-            credits: 3
-          })
-          .select()
-          .single();
-
-        if (!upsertedProfile) {
-          // 如果还是失败，返回 null
-          return null;
-        }
-
-        return {
-          id: user.id,
-          name: upsertedProfile.name,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${upsertedProfile.name}`,
-          role: upsertedProfile.role as 'user' | 'admin',
-          credits: upsertedProfile.credits ?? 3
-        } as User;
-      }
-
-      if (!newProfile) {
-        return null;
-      }
-
-      return {
-        id: user.id,
-        name: newProfile.name,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${newProfile.name}`,
-        role: newProfile.role as 'user' | 'admin',
-        credits: newProfile.credits ?? 3
-      } as User;
-    }
-
-    return {
-      id: user.id,
-      name: profile.name,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.name}`,
-      role: profile.role as 'user' | 'admin',
-      credits: profile.credits ?? 3 // 确保有默认值
-    } as User;
+    const profile = await ensureUserProfile(user);
+    return toAppUser(user, profile) as User;
   } catch (e) {
     console.error("getSessionAction error:", e);
     return null;

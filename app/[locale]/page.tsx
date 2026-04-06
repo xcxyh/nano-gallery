@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+import { useLocale, useTranslations } from 'next-intl';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Plus, Zap, Image as ImageIcon, LogOut, LayoutGrid, Coins, Lock, Search, ShieldCheck } from 'lucide-react';
 import { Template, User } from '@/types';
 import TemplateCard from '@/components/TemplateCard';
@@ -43,7 +44,11 @@ export default function Home() {
   const tTabs = useTranslations('tabs');
   const tEmpty = useTranslations('empty');
   const tFooter = useTranslations('footer');
-  const tTemplate = useTranslations('template');
+  const tErrors = useTranslations('errors');
+  const locale = useLocale();
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   // Tabs Cache State
   const [tabsData, setTabsData] = useState<Record<string, TabData>>({
@@ -64,6 +69,7 @@ export default function Home() {
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [pendingCount, setPendingCount] = useState(0);
+  const [loginError, setLoginError] = useState('');
 
   // Derived state for current view
   const currentTabState = tabsData[activeTab];
@@ -103,8 +109,25 @@ export default function Home() {
     return () => clearTimeout(handler);
   }, [searchQuery]);
 
+  useEffect(() => {
+    const authError = searchParams.get('authError');
+
+    if (!authError) return;
+
+    const messageMap: Record<string, string> = {
+      oauthCancelled: tErrors('oauthCancelled'),
+      oauthFailed: tErrors('oauthFailed'),
+      oauthProfileSyncFailed: tErrors('oauthProfileSyncFailed')
+    };
+
+    setLoginError(messageMap[authError] || tErrors('authFailed'));
+    setIsLoginOpen(true);
+    router.replace(pathname || `/${locale}`, { scroll: false });
+  }, [locale, pathname, router, searchParams, tErrors]);
+
   const handleLoginSuccess = (newUser: User) => {
     setUser(newUser);
+    setLoginError('');
     // Force reload library
     loadTemplates(true, 'library');
     // If we are currently on library, this will trigger update
@@ -504,8 +527,12 @@ export default function Home() {
 
       <LoginModal 
         isOpen={isLoginOpen} 
-        onClose={() => setIsLoginOpen(false)}
+        onClose={() => {
+          setIsLoginOpen(false);
+          setLoginError('');
+        }}
         onLoginSuccess={handleLoginSuccess}
+        initialError={loginError}
       />
     </div>
   );

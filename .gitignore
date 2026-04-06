@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 
 .next
+.omx/state
+.omx/metrics.json
+.omx/tmux-hook.json
